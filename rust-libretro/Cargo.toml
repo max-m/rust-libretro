@@ -12,6 +12,9 @@ documentation = "https://docs.rs/rust-libretro/"
 homepage = "https://github.com/max-m/rust-libretro/"
 repository = "https://github.com/max-m/rust-libretro/"
 
+[package.metadata.docs.rs]
+features = [ "log", "unstable-env-commands" ]
+
 [features]
 unstable-env-commands = []
 
