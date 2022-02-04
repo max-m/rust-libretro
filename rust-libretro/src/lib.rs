@@ -335,7 +335,10 @@ pub unsafe extern "C" fn retro_run() {
 #[no_mangle]
 pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: size_t) -> bool {
     if data.is_null() {
-        println!("TODO: retro_serialize: Data is null")
+        #[cfg(feature = "log")]
+        log::warn!("retro_serialize: data is null");
+
+        return false;
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -353,7 +356,10 @@ pub unsafe extern "C" fn retro_unserialize(
     size: size_t,
 ) -> bool {
     if data.is_null() {
-        println!("TODO: retro_unserialize: Data is null")
+        #[cfg(feature = "log")]
+        log::warn!("retro_unserialize: data is null");
+
+        return false;
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -372,7 +378,10 @@ pub unsafe extern "C" fn retro_cheat_set(
     code: *const std::os::raw::c_char,
 ) {
     if code.is_null() {
-        println!("TODO: retro_cheat_set: code is null")
+        #[cfg(feature = "log")]
+        log::warn!("retro_cheat_set: code is null");
+
+        return;
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -420,7 +429,10 @@ pub unsafe extern "C" fn retro_load_game_special(
     num_info: size_t,
 ) -> bool {
     if info.is_null() {
-        println!("TODO: retro_load_game_special: info is null")
+        #[cfg(feature = "log")]
+        log::warn!("retro_load_game_special: info is null");
+
+        return false;
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
