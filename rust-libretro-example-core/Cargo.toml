@@ -1,0 +1,25 @@
+[package]
+name = "rust-libretro-example-core"
+version = "0.1.0"
+edition = "2021"
+authors = [ "Maximilian Mader" ]
+description = "libretro example core"
+keywords = [ "libretro", "RetroArch", "emulator", "game", "bindgen" ]
+categories = [ "api-bindings", "emulators", "game-development", "gui", "games" ]
+readme = "README.md"
+license = "MIT"
+documentation = "https://docs.rs/rust-libretro-example-core/"
+homepage = "https://github.com/max-m/rust-libretro/"
+repository = "https://github.com/max-m/rust-libretro/"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+libc = "0.2.117"
+log = "0.4.14"
+
+[dependencies.rust-libretro]
+version = "0.1.0"
+path = "../rust-libretro"
+features = [ "log", "unstable-env-commands" ]

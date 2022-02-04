@@ -1,0 +1,19 @@
+[package]
+name = "rust-libretro-sys"
+version = "0.1.0"
+edition = "2021"
+authors = [ "Maximilian Mader" ]
+description = "libretro API bindings generated via bindgen"
+keywords = [ "libretro", "RetroArch", "emulator", "game", "bindgen" ]
+categories = [ "external-ffi-bindings", "emulators", "game-development", "gui" ]
+readme = "README.md"
+license = "MIT"
+documentation = "https://docs.rs/rust-libretro-sys/"
+homepage = "https://github.com/max-m/rust-libretro/"
+repository = "https://github.com/max-m/rust-libretro/"
+
+[dependencies]
+libc = "0.2.117"
+
+[build-dependencies]
+bindgen = "0.59.2"

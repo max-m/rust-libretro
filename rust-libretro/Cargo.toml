@@ -1,0 +1,28 @@
+[package]
+name = "rust-libretro"
+version = "0.1.0"
+edition = "2021"
+authors = [ "Maximilian Mader" ]
+description = "libretro API abstractions"
+keywords = [ "libretro", "RetroArch", "emulator", "game" ]
+categories = [ "api-bindings", "emulators", "game-development", "gui" ]
+readme = "README.md"
+license = "MIT"
+documentation = "https://docs.rs/rust-libretro/"
+homepage = "https://github.com/max-m/rust-libretro/"
+repository = "https://github.com/max-m/rust-libretro/"
+
+[features]
+unstable-env-commands = []
+
+[dependencies]
+rust-libretro-sys = { version = "0.1.0", path = "../rust-libretro-sys" }
+rust-libretro-proc = { version = "0.1.0", path = "rust-libretro-proc" }
+
+cfg-if = "1.0.0"
+bitflags = "1.3.2"
+doc_item = "0.2.5"
+log = { version = "0.4.14", optional = true }
+
+[dev-dependencies]
+libc = "0.2.117"

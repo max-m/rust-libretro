@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 106 106">
+  <g>
+    <path fill="#fff" d="M41.38 18.77v21.27H18.97V65.6h22.4v20.76h23.2V65.59H86.1V40.04H64.58V18.77h-23.2z"/>
+    <path fill="#282425" d="M39 14v25H20.13l-2.28 4.4L14 45.45V67h25v25h28V67h25V45.9l-4.16-2.83L86.63 39H67V14h-8.46l-5.52 2.7-6.06-2.7zm14 8 9 9H44ZM31 44v18l-9-9zm22 0a9 9 0 1 1 0 18 9 9 0 0 1 0-18zm22 0 9 9-9 9zM44 75h18l-9 9z"/>
+  </g>
+  <g transform="translate(53 53)">
+    <g mask="url(#a)">
+      <circle r="43" fill="none" stroke="#871618" stroke-width="9"/>
+      <path id="b" fill="#871618" fill-opacity="1" stroke="#871618" stroke-linejoin="round" stroke-opacity="1" stroke-width="3" d="m46 3 5-3-5-3z"/>
+      <use xlink:href="#b" transform="rotate(11.25)"/>
+      <use xlink:href="#b" transform="rotate(22.5)"/>
+      <use xlink:href="#b" transform="rotate(33.75)"/>
+      <use xlink:href="#b" transform="rotate(45)"/>
+      <use xlink:href="#b" transform="rotate(56.25)"/>
+      <use xlink:href="#b" transform="rotate(67.5)"/>
+      <use xlink:href="#b" transform="rotate(78.75)"/>
+      <use xlink:href="#b" transform="rotate(90)"/>
+      <use xlink:href="#b" transform="rotate(101.25)"/>
+      <use xlink:href="#b" transform="rotate(112.5)"/>
+      <use xlink:href="#b" transform="rotate(123.75)"/>
+      <use xlink:href="#b" transform="rotate(135)"/>
+      <use xlink:href="#b" transform="rotate(146.25)"/>
+      <use xlink:href="#b" transform="rotate(157.5)"/>
+      <use xlink:href="#b" transform="rotate(168.75)"/>
+      <use xlink:href="#b" transform="rotate(180)"/>
+      <use xlink:href="#b" transform="rotate(191.25)"/>
+      <use xlink:href="#b" transform="rotate(202.5)"/>
+      <use xlink:href="#b" transform="rotate(213.75)"/>
+      <use xlink:href="#b" transform="rotate(225)"/>
+      <use xlink:href="#b" transform="rotate(236.25)"/>
+      <use xlink:href="#b" transform="rotate(247.5)"/>
+      <use xlink:href="#b" transform="rotate(258.75)"/>
+      <use xlink:href="#b" transform="rotate(270)"/>
+      <use xlink:href="#b" transform="rotate(281.25)"/>
+      <use xlink:href="#b" transform="rotate(292.5)"/>
+      <use xlink:href="#b" transform="rotate(303.75)"/>
+      <use xlink:href="#b" transform="rotate(315)"/>
+      <use xlink:href="#b" transform="rotate(326.25)"/>
+      <use xlink:href="#b" transform="rotate(337.5)"/>
+      <use xlink:href="#b" transform="rotate(348.75)"/>
+      <g stroke="#871618">
+        <path id="c" stroke-linejoin="round" stroke-opacity="1" stroke-width="6" d="m-7-42 7 7 7-7z"/>
+        <use xlink:href="#c" transform="rotate(72)"/>
+        <use xlink:href="#c" transform="rotate(144)"/>
+        <use xlink:href="#c" transform="rotate(216)"/>
+        <use xlink:href="#c" transform="rotate(288)"/>
+      </g>
+    </g>
+    <mask id="a">
+      <path fill="#fff" d="M-60-60H60V60H-60z"/>
+      <circle id="d" cy="-40" r="3"/>
+      <use xlink:href="#d" transform="rotate(72)"/>
+      <use xlink:href="#d" transform="rotate(144)"/>
+      <use xlink:href="#d" transform="rotate(216)"/>
+      <use xlink:href="#d" transform="rotate(288)"/>
+    </mask>
+  </g>
+</svg>

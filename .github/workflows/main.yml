@@ -1,0 +1,61 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [stable, beta, nightly, macos, win64] # win32
+        include:
+          - build: stable
+            os: ubuntu-latest
+            rust: stable
+          - build: beta
+            os: ubuntu-latest
+            rust: beta
+          - build: nightly
+            os: ubuntu-latest
+            rust: nightly
+          - build: macos
+            os: macos-latest
+            rust: stable
+          # - build: win32
+          #   os: windows-latest
+          #   rust: stable-i686
+          - build: win64
+            os: windows-latest
+            rust: stable-x86_64
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust (rustup)
+      run: |
+        rustup update ${{ matrix.rust }} --no-self-update
+        rustup default ${{ matrix.rust }}
+    - name: Set LIBCLANG_PATH
+      run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+      if: matrix.os == 'windows-latest'
+    - name: MSVC linker args
+      # the MSVC linker will scream at us otherwise when trying to build the tests for `rust-libretro`,
+      # because in that case `__retro_init_core` will not have been exported by a core implementation.
+      run: |
+        echo "RUSTFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
+        echo "RUSTDOCFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
+      if: matrix.os == 'windows-latest'
+    - run: cargo test --workspace --verbose
+    - run: cargo test --workspace --verbose --no-default-features
+    - run: cargo test --workspace --verbose --all-features
+
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      run: |
+        rustup update stable --no-self-update
+        rustup default stable
+        rustup component add rustfmt
+    - run: cargo fmt -- --check

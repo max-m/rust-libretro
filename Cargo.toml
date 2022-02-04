@@ -1,0 +1,24 @@
+[workspace]
+members = [
+	"rust-libretro-sys",
+	"rust-libretro",
+	"rust-libretro-example-core",
+]
+
+default-members = [
+	"rust-libretro"
+]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+incremental = false
+codegen-units = 8
+rpath = false
