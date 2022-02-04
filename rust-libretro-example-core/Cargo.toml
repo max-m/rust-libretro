@@ -20,6 +20,6 @@ libc = "0.2.117"
 log = "0.4.14"
 
 [dependencies.rust-libretro]
-version = "0.1.0"
+version = "0.1.1"
 path = "../rust-libretro"
 features = [ "log", "unstable-env-commands" ]
