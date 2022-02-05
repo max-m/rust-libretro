@@ -15,7 +15,7 @@ pub mod types;
 pub mod util;
 
 pub use crate::core::*;
-pub use proc::{DeriveCoreOptions as CoreOptions, *};
+pub use proc::*;
 pub use rust_libretro_proc as proc;
 pub use rust_libretro_sys as sys;
 
@@ -254,11 +254,11 @@ pub unsafe extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_inf
 
 /// TODO: This method seems to get called multiple times by RetroArch
 #[no_mangle]
-pub unsafe extern "C" fn retro_set_environment(arg1: retro_environment_t) {
+pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t) {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         let mut initial = false;
 
-        if let Some(callback) = arg1 {
+        if let Some(callback) = environment {
             if !wrapper.environment_set {
                 initial = true;
                 wrapper.environment_set = true;
@@ -278,6 +278,13 @@ pub unsafe extern "C" fn retro_set_environment(arg1: retro_environment_t) {
         }
 
         let mut ctx = SetEnvironmentContext::new(&wrapper.environment_callback);
+
+        // Our default implementation of `set_core_options` uses `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION`,
+        // which seems to only work on the first call to `retro_set_environment`.
+        if initial && !wrapper.core.set_core_options(&ctx) {
+            #[cfg(feature = "log")]
+            log::warn!("Failed to set core options");
+        }
 
         wrapper.core.on_set_environment(initial, &mut ctx);
     }
@@ -344,7 +351,10 @@ pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         let mut ctx = GenericContext::new(&wrapper.environment_callback);
 
-        return wrapper.core.on_serialize(data, size, &mut ctx);
+        // Convert the given buffer into a proper slice
+        let slice = std::slice::from_raw_parts_mut(data as *mut u8, size as usize);
+
+        return wrapper.core.on_serialize(slice, &mut ctx);
     }
 
     panic!("retro_serialize: Core has not been initialized yet!");
@@ -365,7 +375,10 @@ pub unsafe extern "C" fn retro_unserialize(
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         let mut ctx = GenericContext::new(&wrapper.environment_callback);
 
-        return wrapper.core.on_unserialize(data, size, &mut ctx);
+        // Convert the given buffer into a proper slice
+        let slice = std::slice::from_raw_parts_mut(data as *mut u8, size as usize);
+
+        return wrapper.core.on_unserialize(slice, &mut ctx);
     }
 
     panic!("retro_unserialize: Core has not been initialized yet!");
@@ -387,7 +400,17 @@ pub unsafe extern "C" fn retro_cheat_set(
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         let mut ctx = GenericContext::new(&wrapper.environment_callback);
 
-        return wrapper.core.on_cheat_set(index, enabled, code, &mut ctx);
+        // Wrap the pointer into a `CStr`.
+        // This assumes the pointer is valid and ends on a null byte.
+        //
+        // For now we’ll let the core handle conversion to Rust `str` or `String`,
+        // as the lack of documentation doesn’t make it clear if the returned string
+        // is encoded as valid UTF-8.
+        let code = CStr::from_ptr(code);
+
+        return wrapper
+            .core
+            .on_cheat_set(index, enabled, code, &mut ctx);
     }
 
     panic!("retro_cheat_set: Core has not been initialized yet!");

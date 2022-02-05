@@ -300,10 +300,16 @@ impl Concat<CoreOptionCategories> for Vec<CoreOptionCategories> {
     }
 }
 
-/// Used to define variables and core options for your [`rust_libretro::Core`] struct.
+/// Implements the CoreOptions trait by generating a `set_core_options()` implementation
+/// that checks whether the frontend supports “options v2” or “options v1”
+/// and uses `retro_variable`s as fallback.
 ///
-/// A struct that has been decorated with this attribute will have a `Self::set_core_options`
-/// function which should be called in [`rust_libretro::Core::on_set_environment`].
+/// Initializes the following data structures from the given input:
+/// - `retro_core_option_definition`
+/// - `retro_variable`
+/// - `retro_core_option_v2_category`
+/// - `retro_core_option_v2_definition`
+/// - `retro_core_options_v2`
 ///
 /// Example usage:
 /// ```ignore
@@ -331,9 +337,10 @@ impl Concat<CoreOptionCategories> for Vec<CoreOptionCategories> {
 /// struct TestCore;
 /// ```
 ///
-/// TODO: Support structs with generic parameters.
-/// TODO: Add V2 (category support) documentation
-#[proc_macro_derive(DeriveCoreOptions, attributes(options, categories))]
+/// TODO:
+/// - Add V2 (category support) documentation
+/// - Support `*_intl` variants
+#[proc_macro_derive(CoreOptions, attributes(options, categories))]
 pub fn derive_core_options(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -553,6 +560,21 @@ fn impl_derive_core_options(input: DeriveInput) -> TokenStream {
         .collect::<Vec<_>>();
 
     let expanded = quote! {
+        impl #impl_generics ::rust_libretro::CoreOptions for #name #ty_generics #where_clause {
+            fn set_core_options(&self, ctx: &SetEnvironmentContext) -> bool {
+                let gctx: GenericContext = ctx.into();
+
+                // For some reason the call to `supports_set_core_options` only works on the initial call of `on_set_environment`.
+                // On subsequent calls of `on_set_environment` querying `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION` returns NULL pointers.
+                // But our `retro_set_environment` wrapper makes sure to call us on the initial call of `on_set_environment` only.
+                match gctx.get_core_options_version() {
+                    n if n >= 2 => ctx.set_core_options_v2(&Self::__RETRO_CORE_OPTIONS_V2),
+                    n if n >= 1 => ctx.set_core_options(&Self::__RETRO_CORE_OPTIONS),
+                    _ => ctx.set_variables(&Self::__RETRO_CORE_VARIABLES)
+                }
+            }
+        }
+
         impl #impl_generics #name #ty_generics #where_clause {
             #[doc(hidden)]
             const __RETRO_CORE_OPTIONS: [retro_core_option_definition; #option_count + 1] = [
@@ -620,18 +642,6 @@ fn impl_derive_core_options(input: DeriveInput) -> TokenStream {
                 /// HERE BE DRAGONS, but mutable references are not allowed
                 definitions: &Self::__RETRO_CORE_OPTION_V2_DEFINITIONS as *const _ as *mut _,
             };
-
-            /// For some reason the call to `supports_set_core_options` only works on the initial call of `on_set_environment`.
-            /// On subsequent calls of `on_set_environment` querying `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION` returns NULL pointers.
-            unsafe fn set_core_options(ctx: &SetEnvironmentContext) -> bool {
-                let gctx: GenericContext = ctx.into();
-
-                match gctx.get_core_options_version() {
-                    n if n >= 2 => ctx.set_core_options_v2(&Self::__RETRO_CORE_OPTIONS_V2),
-                    n if n >= 1 => ctx.set_core_options(&Self::__RETRO_CORE_OPTIONS),
-                    _ => ctx.set_variables(&Self::__RETRO_CORE_VARIABLES)
-                }
-            }
         }
     };
 
@@ -678,7 +688,7 @@ pub fn unstable(args: TokenStream, input: TokenStream) -> TokenStream {
         let unstable_doc = format!(
             "# This feature is unstable and guarded by the `{}` feature flag.\
             \n\
-            Please be advised that this feature might change without further notice\
+            Please be advised that this feature might change without further notice \
             and no guarantees about its stability can be made.",
             feature_name
         );
@@ -710,6 +720,7 @@ pub fn unstable(args: TokenStream, input: TokenStream) -> TokenStream {
     item.into_token_stream().into()
 }
 
+#[doc(hidden)]
 #[proc_macro_attribute]
 pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
     let ctx_name = parse_macro_input!(args as syn::Ident);

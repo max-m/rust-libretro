@@ -6,7 +6,7 @@ debug:
 
 native:
 	RUSTFLAGS="-C target-cpu=native" cargo build --release
-	strip ../target/release/rust-libretro-example-core.so
+	strip ../target/release/librust_libretro_example_core.so
 
 clean:
 	cargo clean

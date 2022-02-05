@@ -117,10 +117,6 @@ impl Core for ExampleCore {
             return;
         }
 
-        unsafe {
-            Self::set_core_options(ctx);
-        }
-
         ctx.set_support_no_game(true);
     }
 

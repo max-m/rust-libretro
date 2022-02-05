@@ -1,5 +1,6 @@
 use super::*;
 
+#[doc(hidden)]
 macro_rules! into_generic {
     ($type:ty, $lifetime:tt) => {
         into_generic!($type, GenericContext, $lifetime);
@@ -19,6 +20,7 @@ macro_rules! into_generic {
     };
 }
 
+#[doc(hidden)]
 macro_rules! make_context {
     ($name:ident $(, #[doc = $doc:tt ])?) => {
         $(#[doc = $doc])?
@@ -273,7 +275,7 @@ pub struct AudioContext<'a> {
 }
 
 impl AudioContext<'_> {
-    /// Renders multiple audio frames in one go if [`CoreWrapper::audio_sample_batch_callback`] has been set.
+    /// Renders multiple audio frames in one go if [`AudioContext::audio_sample_batch_callback`] has been set.
     ///
     /// One frame is defined as a sample of left and right channels, interleaved.
     /// I.e. `let buf: [u16; 4] = [ l, r, l, r ];` would be 2 frames.
@@ -289,7 +291,7 @@ impl AudioContext<'_> {
         }
     }
 
-    /// Renders a single audio frame if [`CoreWrapper::audio_sample_callback`] has been set.
+    /// Renders a single audio frame if [`AudioContext::audio_sample_callback`] has been set.
     /// Should only be used if implementation generates a single sample at a time.
     /// Format is signed 16-bit native endian.
     ///
@@ -344,7 +346,7 @@ impl<'a> RunContext<'_> {
         self.can_dupe
     }
 
-    /// Polls for input if [`CoreWrapper::input_poll_callback`] has been set
+    /// Polls for input if [`RunContext::input_poll_callback`] has been set
     pub fn poll_input(&self) {
         if let Some(callback) = self.input_poll_callback {
             unsafe {
@@ -353,7 +355,7 @@ impl<'a> RunContext<'_> {
         }
     }
 
-    /// Gets the input state for the given player and device if [`CoreWrapper::input_state_callback`] has been set
+    /// Gets the input state for the given player and device if [`RunContext::input_state_callback`] has been set
     pub fn get_input_state(&self, port: u32, device: u32, index: u32, id: u32) -> u16 {
         if let Some(callback) = self.input_state_callback {
             unsafe { (callback)(port, device, index, id) as u16 }
@@ -478,7 +480,7 @@ impl<'a> RunContext<'_> {
         JoypadState::empty()
     }
 
-    /// Draws a new frame if [`CoreWrapper::video_refresh_callback`] has been set
+    /// Draws a new frame if [`RunContext::video_refresh_callback`] has been set
     pub fn draw_frame(&mut self, data: &[u8], width: u32, height: u32, pitch: u64) {
         if let Some(callback) = self.video_refresh_callback {
             *self.had_frame = true;

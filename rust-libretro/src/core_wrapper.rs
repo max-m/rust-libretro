@@ -38,7 +38,7 @@ pub(crate) struct CoreWrapper {
     /// [`RETRO_DEVICE_MASK`].
     ///
     /// Specialization of devices such as `RETRO_DEVICE_JOYPAD_MULTITAP` that
-    /// have been set with [`on_set_controller_port_device`]
+    /// have been set with [`Core::on_set_controller_port_device`]
     /// will still use the higher level [`RETRO_DEVICE_JOYPAD`] to request input.
     pub(crate) input_state_callback: retro_input_state_t,
 
