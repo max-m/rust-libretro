@@ -253,7 +253,33 @@ pub unsafe fn set_disk_control_interface(
 /// If HW rendering is used, call either
 /// [`RunContext::draw_hardware_frame`] or [`RunContext::dupe_frame`].
 #[proc::context(LoadGameContext)]
-pub unsafe fn set_hw_render(callback: retro_environment_t, data: retro_hw_render_callback) -> bool {
+pub unsafe fn set_hw_render(
+    callback: retro_environment_t,
+    context_type: retro_hw_context_type,
+    bottom_left_origin: bool,
+    version_major: u32,
+    version_minor: u32,
+    debug_context: bool,
+) -> bool {
+    let data = retro_hw_render_callback {
+        context_type,
+        bottom_left_origin,
+        version_major,
+        version_minor,
+        cache_context: true,
+        debug_context,
+
+        depth: false,   // obsolete
+        stencil: false, // obsolete
+
+        context_reset: Some(retro_hw_context_reset_callback),
+        context_destroy: Some(retro_hw_context_destroyed_callback),
+
+        // Set by the frontend
+        get_current_framebuffer: None,
+        get_proc_address: None,
+    };
+
     // struct retro_hw_render_callback *
     set(callback, RETRO_ENVIRONMENT_SET_HW_RENDER, data).unwrap_or(false)
 }
