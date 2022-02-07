@@ -1,5 +1,7 @@
+//! Provides the [`Core`] and [`CoreOptions`] traits.
 use crate::*;
 
+/// This trait defines the [`set_core_options`](CoreOptions::set_core_options) function.
 pub trait CoreOptions {
     /// Used to tell the frontend any options / settings your core supports.
     /// This can be done by using either of the following functions:
@@ -38,7 +40,7 @@ pub trait Core : CoreOptions {
         // Do nothing
     }
 
-    /// TODO: Documentation
+    /// **TODO:** Documentation
     fn on_set_controller_port_device(
         &mut self,
         _port: std::os::raw::c_uint,
@@ -82,7 +84,7 @@ pub trait Core : CoreOptions {
 
     /// Deserializes internal state.
     ///
-    /// TODO: Documentation
+    /// **TODO:** Documentation
     fn on_unserialize(&mut self, _slice: &mut [u8], _ctx: &mut UnserializeContext) -> bool {
         // Tell the frontend that we don’t support serialization
         false
@@ -97,7 +99,7 @@ pub trait Core : CoreOptions {
 
     /// Loads a "special" kind of game. Should not be used, except in extreme cases.
     ///
-    /// TODO: Better documentation. What’s a “special” game?
+    /// **TODO:** Better documentation. What’s a “special” game?
     fn on_load_game_special(
         &mut self,
         _game_type: std::os::raw::c_uint,
@@ -119,7 +121,7 @@ pub trait Core : CoreOptions {
         // Do nothing
     }
 
-    /// TODO: Documentation
+    /// **TODO:** Documentation
     fn on_cheat_set(
         &mut self,
         _index: std::os::raw::c_uint,
@@ -139,7 +141,7 @@ pub trait Core : CoreOptions {
         RETRO_REGION_NTSC
     }
 
-    /// TODO: Documentation
+    /// **TODO:** Documentation
     fn get_memory_data(
         &mut self,
         _id: std::os::raw::c_uint,
@@ -149,7 +151,7 @@ pub trait Core : CoreOptions {
         std::ptr::null_mut()
     }
 
-    /// TODO: Documentation
+    /// **TODO:** Documentation
     fn get_memory_size(
         &mut self,
         _id: std::os::raw::c_uint,
@@ -166,7 +168,7 @@ pub trait Core : CoreOptions {
         // Do nothing
     }
 
-    /// TODO: Documentation
+    /// **TODO:** Documentation
     fn on_keyboard_event(
         &mut self,
         _down: bool,
@@ -179,6 +181,10 @@ pub trait Core : CoreOptions {
 
     /// Called when the frontend needs more audio frames
     fn on_write_audio(&mut self, _ctx: &mut AudioContext) {
+        // Do nothing
+    }
+
+    fn on_audio_set_state(&mut self, _enabled: bool) {
         // Do nothing
     }
 }

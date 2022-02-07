@@ -1,3 +1,4 @@
+//! Utility functions
 use super::*;
 
 /// Tries to convert a pointer to a [`CString`] into a Rust [`str`]

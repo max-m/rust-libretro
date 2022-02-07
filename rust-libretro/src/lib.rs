@@ -14,10 +14,10 @@ pub mod environment;
 pub mod types;
 pub mod util;
 
-pub use crate::core::*;
-pub use proc::*;
 pub use rust_libretro_proc as proc;
 pub use rust_libretro_sys as sys;
+pub use crate::core::*;
+pub use proc::*;
 
 use contexts::*;
 use core_wrapper::*;
@@ -30,8 +30,62 @@ use sys::*;
 use types::*;
 use util::*;
 
+#[doc(hidden)]
 static mut RETRO_INSTANCE: Option<CoreWrapper> = None;
 
+/// This macro must be used to initialize your [`Core`].
+///
+/// # Examples
+/// ```rust
+/// # use rust_libretro::{contexts::*, sys::*, types::*, *};
+/// # use std::ffi::CString;
+/// struct ExampleCore {
+///     option_1: bool,
+///     option_2: bool,
+///
+///     pixels: [u8; 800 * 600 * 4],
+///     timer: i64,
+///     even: bool,
+/// }
+/// retro_core!(ExampleCore {
+///     option_1: false,
+///     option_2: true,
+///
+///     pixels: [0; 800 * 600 * 4],
+///     timer: 5_000_001,
+///     even: true,
+/// });
+///
+/// /// Dummy implementation
+/// impl CoreOptions for ExampleCore {}
+/// impl Core for ExampleCore {
+///     fn get_info(&self) -> SystemInfo {
+///         SystemInfo {
+///             library_name: CString::new("ExampleCore").unwrap(),
+///             library_version: CString::new("1.0.0").unwrap(),
+///             valid_extensions: CString::new("").unwrap(),
+///             need_fullpath: false,
+///             block_extract: false,
+///         }
+///     }
+///     fn on_get_av_info(&mut self, _ctx: &mut GetAvInfoContext) -> retro_system_av_info {
+///         retro_system_av_info {
+///             geometry: retro_game_geometry {
+///                 base_width: 800,
+///                 base_height: 600,
+///                 max_width: 800,
+///                 max_height: 600,
+///                 aspect_ratio: 0.0,
+///             },
+///             timing: retro_system_timing {
+///                 fps: 60.0,
+///                 sample_rate: 0.0,
+///             },
+///         }
+///     }
+///     fn on_init(&mut self, ctx: &mut InitContext) { }
+/// }
+/// ```
 #[macro_export]
 macro_rules! retro_core {
     ( $( $definition:tt )+ ) => {
@@ -44,9 +98,11 @@ macro_rules! retro_core {
     }
 }
 
+#[doc(hidden)]
 macro_rules! forward {
-    ($wrapper:ident, $name:ident, $handler:ident $(-> $return_type:ty)?, $($context:tt)+) => {
+    ($(#[doc = $doc:tt ], )* $wrapper:ident, $name:ident, $handler:ident $(-> $return_type:ty)?, $($context:tt)+) => {
         #[no_mangle]
+        $(#[doc = $doc])*
         pub unsafe extern "C" fn $name() $(-> $return_type)? {
             // Check that the instance has been created
             if let Some($wrapper) = RETRO_INSTANCE.as_mut() {
@@ -60,9 +116,11 @@ macro_rules! forward {
     };
 }
 
+#[doc(hidden)]
 macro_rules! callback {
-    ($name:ident, $arg:ident, $handler:ident) => {
+    ($(#[doc = $doc:tt ], )* $name:ident, $arg:ident, $handler:ident) => {
         #[no_mangle]
+        $(#[doc = $doc])*
         pub unsafe extern "C" fn $name(arg1: $arg) {
             // Check that the instance has been created
             if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -106,6 +164,7 @@ pub fn set_core<C: 'static + Core>(core: C) {
 }
 
 #[cfg(feature = "log")]
+#[doc(hidden)]
 fn init_log(env_callback: retro_environment_t) {
     let retro_logger = unsafe { environment::get_log_callback(env_callback) };
 
@@ -124,26 +183,47 @@ fn init_log(env_callback: retro_environment_t) {
 \*****************************************************************************/
 
 forward!(
+    #[doc = "Notifies the [`Core`] when all cheats should be unapplied."],
     wrapper,
     retro_cheat_reset,
     on_cheat_reset,
     GenericContext::new(&wrapper.environment_callback)
 );
 forward!(
+    #[doc = "Notifies the [`Core`] when it is being closed and its resources should be freed."],
     wrapper,
     retro_deinit,
     on_deinit,
     GenericContext::new(&wrapper.environment_callback)
 );
-forward!(wrapper, retro_get_region,     on_get_region -> std::os::raw::c_uint, GenericContext::new(&wrapper.environment_callback));
 forward!(
+    #[doc = "Called when the frontend needs region information from the [`Core`]."],
+    #[doc = ""],
+    #[doc = "## Note about RetroArch:"],
+    #[doc = "RetroArch doesn’t use this interface anymore, because [`retro_get_system_av_info`] provides similar information."],
+    wrapper,
+    retro_get_region,
+    on_get_region -> std::os::raw::c_uint,
+    GenericContext::new(&wrapper.environment_callback)
+);
+forward!(
+    #[doc = "Notifies the [`Core`] when the current game should be reset."],
     wrapper,
     retro_reset,
     on_reset,
     GenericContext::new(&wrapper.environment_callback)
 );
-forward!(wrapper, retro_serialize_size, get_serialize_size -> size_t,          GenericContext::new(&wrapper.environment_callback));
 forward!(
+    #[doc = "Called when the frontend needs to know how large a buffer to allocate for save states."],
+    #[doc = ""],
+    #[doc = "See also [`rust_libretro_sys::retro_serialize_size`]."],
+    wrapper,
+    retro_serialize_size,
+    get_serialize_size -> size_t,
+    GenericContext::new(&wrapper.environment_callback)
+);
+forward!(
+    #[doc = "Notifies the [`Core`] when the currently loaded game should be unloaded. Called before [`retro_deinit`]."],
     wrapper,
     retro_unload_game,
     on_unload_game,
@@ -151,32 +231,55 @@ forward!(
 );
 
 callback!(
+    #[doc = "Provides the audio sample callback to the [`Core`]."],
+    #[doc = ""],
+    #[doc = "Guaranteed to have been called before the first call to [`retro_run`] is made."],
     retro_set_audio_sample,
     retro_audio_sample_t,
     on_set_audio_sample
 );
 callback!(
+    #[doc = "Provides the batched audio sample callback to the [`Core`]."],
+    #[doc = ""],
+    #[doc = "Guaranteed to have been called before the first call to [`retro_run`] is made."],
     retro_set_audio_sample_batch,
     retro_audio_sample_batch_t,
     on_set_audio_sample_batch
 );
-callback!(retro_set_input_poll, retro_input_poll_t, on_set_input_poll);
 callback!(
+    #[doc = "Provides the input polling callback to the [`Core`]."],
+    #[doc = ""],
+    #[doc = "Guaranteed to have been called before the first call to [`retro_run`] is made."],
+    retro_set_input_poll,
+    retro_input_poll_t,
+    on_set_input_poll
+);
+callback!(
+    #[doc = "Provides the input state request callback to the [`Core`]."],
+    #[doc = ""],
+    #[doc = "Guaranteed to have been called before the first call to [`retro_run`] is made."],
     retro_set_input_state,
     retro_input_state_t,
     on_set_input_state
 );
 callback!(
+    #[doc = "Provides the frame drawing callback to the [`Core`]."],
+    #[doc = ""],
+    #[doc = "Guaranteed to have been called before the first call to [`retro_run`] is made."],
     retro_set_video_refresh,
     retro_video_refresh_t,
     on_set_video_refresh
 );
 
+/// Tells the frontend which API version this [`Core`] implements.
 #[no_mangle]
 pub unsafe extern "C" fn retro_api_version() -> std::os::raw::c_uint {
     RETRO_API_VERSION
 }
 
+/// Initializes the [`Core`].
+///
+/// Called after the environment callbacks have been set.
 #[no_mangle]
 pub unsafe extern "C" fn retro_init() {
     if let Some(mut wrapper) = RETRO_INSTANCE.as_mut() {
@@ -190,6 +293,9 @@ pub unsafe extern "C" fn retro_init() {
     }
 }
 
+/// Provides _statically known_ system info to the frontend.
+///
+/// See also [`rust_libretro_sys::retro_get_system_info`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
     // Make sure that the pointer we got is plausible
@@ -230,6 +336,11 @@ pub unsafe extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
     info.block_extract = sys_info.block_extract;
 }
 
+/// Provides audio/video timings and geometry info to the frontend.
+///
+/// Guaranteed to be called only after successful invocation of [`retro_load_game`].
+///
+/// See also [`rust_libretro_sys::retro_get_system_av_info`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_info) {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -252,7 +363,11 @@ pub unsafe extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_inf
     }
 }
 
-/// TODO: This method seems to get called multiple times by RetroArch
+/// Provides the environment callback to the [`Core`].
+///
+/// Guaranteed to have been called before [`retro_init`].
+///
+/// **TODO:** This method seems to get called multiple times by RetroArch
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t) {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -290,6 +405,9 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
     }
 }
 
+/// Sets the device type to be used for player `port`.
+///
+/// See also [`rust_libretro_sys::retro_set_controller_port_device`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_controller_port_device(
     port: std::os::raw::c_uint,
@@ -302,6 +420,9 @@ pub unsafe extern "C" fn retro_set_controller_port_device(
     panic!("retro_set_controller_port_device: Core has not been initialized yet!");
 }
 
+/// Runs the game for one frame.
+///
+/// See also [`rust_libretro_sys::retro_run`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_run() {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -339,6 +460,10 @@ pub unsafe extern "C" fn retro_run() {
     panic!("retro_run: Core has not been initialized yet!");
 }
 
+/// Called by the frontend when the [`Core`]s state should be serialized (“save state”).
+/// This function should return [`false`] on error.
+///
+/// This could also be used by a frontend to implement rewind.
 #[no_mangle]
 pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: size_t) -> bool {
     if data.is_null() {
@@ -360,6 +485,10 @@ pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: 
     panic!("retro_serialize: Core has not been initialized yet!");
 }
 
+/// Called by the frontend when a “save state” should be loaded.
+/// This function should return [`false`] on error.
+///
+/// This could also be used by a frontend to implement rewind.
 #[no_mangle]
 pub unsafe extern "C" fn retro_unserialize(
     data: *const std::os::raw::c_void,
@@ -384,6 +513,10 @@ pub unsafe extern "C" fn retro_unserialize(
     panic!("retro_unserialize: Core has not been initialized yet!");
 }
 
+/// Called by the frontend whenever a cheat should be applied.
+///
+/// The format is core-specific but this function lacks a return value,
+/// so a [`Core`] can’t tell the frontend if it failed to parse a code.
 #[no_mangle]
 pub unsafe extern "C" fn retro_cheat_set(
     index: std::os::raw::c_uint,
@@ -408,14 +541,15 @@ pub unsafe extern "C" fn retro_cheat_set(
         // is encoded as valid UTF-8.
         let code = CStr::from_ptr(code);
 
-        return wrapper
-            .core
-            .on_cheat_set(index, enabled, code, &mut ctx);
+        return wrapper.core.on_cheat_set(index, enabled, code, &mut ctx);
     }
 
     panic!("retro_cheat_set: Core has not been initialized yet!");
 }
 
+/// Called by the frontend when a game should be loaded.
+///
+/// A return value of [`true`] indicates success.
 #[no_mangle]
 pub unsafe extern "C" fn retro_load_game(game: *const retro_game_info) -> bool {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -445,6 +579,7 @@ pub unsafe extern "C" fn retro_load_game(game: *const retro_game_info) -> bool {
     panic!("retro_load_game: Core has not been initialized yet!");
 }
 
+/// See [`rust_libretro_sys::retro_load_game_special`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_load_game_special(
     game_type: std::os::raw::c_uint,
@@ -475,6 +610,10 @@ pub unsafe extern "C" fn retro_load_game_special(
     panic!("retro_load_game_special: Core has not been initialized yet!");
 }
 
+/// Returns a mutable pointer to queried memory type.
+/// Return [`std::ptr::null()`] in case this doesn’t apply to your [`Core`].
+///
+/// `id` is one of the `RETRO_MEMORY_*` constants.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_memory_data(
     id: std::os::raw::c_uint,
@@ -488,6 +627,10 @@ pub unsafe extern "C" fn retro_get_memory_data(
     panic!("retro_get_memory_data: Core has not been initialized yet!");
 }
 
+/// Returns the size (in bytes) of the queried memory type.
+/// Return `0` in case this doesn’t apply to your [`Core`].
+///
+/// `id` is one of the `RETRO_MEMORY_*` constants.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_memory_size(id: std::os::raw::c_uint) -> size_t {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -526,11 +669,19 @@ pub unsafe extern "C" fn retro_keyboard_callback_fn(
     }
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_hw_context_reset_callback() {
     println!("TODO: retro_hw_context_reset_callback")
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
+#[no_mangle]
+pub unsafe extern "C" fn retro_hw_context_destroyed_callback() {
+    println!("TODO: retro_hw_context_destroyed_callback")
+}
+
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_eject_state_callback(ejected: bool) -> bool {
     dbg!(ejected);
@@ -538,18 +689,21 @@ pub unsafe extern "C" fn retro_set_eject_state_callback(ejected: bool) -> bool {
     false
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_eject_state_callback() -> bool {
     println!("TODO: retro_get_eject_state_callback");
     false
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_image_index_callback() -> ::std::os::raw::c_uint {
     println!("TODO: retro_get_image_index_callback");
     0
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_image_index_callback(index: ::std::os::raw::c_uint) -> bool {
     dbg!(index);
@@ -557,12 +711,14 @@ pub unsafe extern "C" fn retro_set_image_index_callback(index: ::std::os::raw::c
     false
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_num_images_callback() -> ::std::os::raw::c_uint {
     println!("TODO: retro_get_num_images_callback");
     0
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_replace_image_index_callback(
     index: ::std::os::raw::c_uint,
@@ -574,12 +730,14 @@ pub unsafe extern "C" fn retro_replace_image_index_callback(
     false
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_add_image_index_callback() -> bool {
     println!("TODO: retro_add_image_index_callback");
     false
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_initial_image_callback(
     index: ::std::os::raw::c_uint,
@@ -591,6 +749,7 @@ pub unsafe extern "C" fn retro_set_initial_image_callback(
     false
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_image_path_callback(
     index: ::std::os::raw::c_uint,
@@ -604,6 +763,7 @@ pub unsafe extern "C" fn retro_get_image_path_callback(
     false
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_image_label_callback(
     index: ::std::os::raw::c_uint,
@@ -624,6 +784,7 @@ pub unsafe extern "C" fn retro_frame_time_callback_fn(usec: retro_usec_t) {
     }
 }
 
+/// Notifies the [`Core`] when audio data should be written.
 #[no_mangle]
 pub unsafe extern "C" fn retro_audio_callback_fn() {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
@@ -638,12 +799,25 @@ pub unsafe extern "C" fn retro_audio_callback_fn() {
     }
 }
 
+/// Notifies the [`Core`] about the state of the frontend’s audio system.
+///
+/// [`true`]: Audio driver in frontend is active, and callback is
+/// expected to be called regularily.
+///
+/// [`false`]: Audio driver in frontend is paused or inactive.
+///
+/// Audio callback will not be called until set_state has been
+/// called with [`true`].
+///
+/// Initial state is [`false`] (inactive).
 #[no_mangle]
 pub unsafe extern "C" fn retro_audio_set_state_callback_fn(enabled: bool) {
-    dbg!(enabled);
-    println!("TODO: retro_audio_set_state_callback_fn")
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        wrapper.core.on_audio_set_state(enabled);
+    }
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_frame_raw_framebuffer_callback(
     buffer: *const u32,
@@ -658,6 +832,7 @@ pub unsafe extern "C" fn retro_camera_frame_raw_framebuffer_callback(
     println!("TODO: retro_camera_frame_raw_framebuffer_callback")
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_frame_opengl_texture_callback(
     texture_id: ::std::os::raw::c_uint,
@@ -670,26 +845,31 @@ pub unsafe extern "C" fn retro_camera_frame_opengl_texture_callback(
     println!("TODO: retro_camera_frame_opengl_texture_callback")
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_initialized_callback() {
     println!("TODO: retro_camera_initialized_callback")
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_deinitialized_callback() {
     println!("TODO: retro_camera_deinitialized_callback")
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_location_lifetime_status_initialized_callback() {
     println!("TODO: retro_location_lifetime_status_initialized_callback")
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_location_lifetime_status_deinitialized_callback() {
     println!("TODO: retro_location_lifetime_status_deinitialized_callback")
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_proc_address_callback(
     sym: *const ::std::os::raw::c_char,
@@ -699,6 +879,7 @@ pub unsafe extern "C" fn retro_get_proc_address_callback(
     None
 }
 
+/// **TODO:** Not exposed to [`Core`] yet.
 #[no_mangle]
 pub unsafe extern "C" fn retro_audio_buffer_status_callback_fn(
     active: bool,

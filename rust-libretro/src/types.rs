@@ -1,3 +1,4 @@
+//! Rust versions of libretro data structures.
 use super::*;
 
 /// Static information about the [`Core`] implementation.
@@ -41,29 +42,6 @@ pub struct SystemInfo {
     /// Necessary for certain libretro implementations that load games
     /// from zipped archives.
     pub block_extract: bool,
-}
-
-bitflags::bitflags! {
-    pub struct EnabledCallbacks: u32 {
-        const KEYBOARD                      = 1 << 0;
-        const DISK_CONTROL                  = 1 << 1;
-        const HW_RENDER_CALLBACK            = 1 << 2;
-        const FRAME_TIME                    = 1 << 3;
-        const AUDIO                         = 1 << 4;
-        const RUMBLE                        = 1 << 5;
-        const SENSOR                        = 1 << 6;
-        const CAMERA                        = 1 << 7;
-        const PERFORMANCE                   = 1 << 8;
-        const LOCATION                      = 1 << 9;
-        const PROC_ADDRESS                  = 1 << 10;
-        const HW_RENDER_INTERFACE           = 1 << 11;
-        const HW_RENDER_CONTEXT_NEGOTIATION = 1 << 12;
-        const VFS                           = 1 << 13;
-        const LED                           = 1 << 14;
-        const MIDI                          = 1 << 15;
-        const DISC_CONTROL_EXT              = 1 << 16;
-        const AUDIO_BUFFER_STATUS           = 1 << 17;
-    }
 }
 
 bitflags::bitflags! {

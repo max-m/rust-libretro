@@ -311,7 +311,8 @@ impl Concat<CoreOptionCategories> for Vec<CoreOptionCategories> {
 /// - `retro_core_option_v2_definition`
 /// - `retro_core_options_v2`
 ///
-/// Example usage:
+/// # Examples
+///
 /// ```ignore
 /// #[derive(CoreOptions)]
 /// #[options({
@@ -337,7 +338,7 @@ impl Concat<CoreOptionCategories> for Vec<CoreOptionCategories> {
 /// struct TestCore;
 /// ```
 ///
-/// TODO:
+/// **TODO**:
 /// - Add V2 (category support) documentation
 /// - Support `*_intl` variants
 #[proc_macro_derive(CoreOptions, attributes(options, categories))]
@@ -650,7 +651,8 @@ fn impl_derive_core_options(input: DeriveInput) -> TokenStream {
 
 /// Marks a function as unstable and guards it behind a feature flag.
 ///
-/// Feature names are accepted as either `#[unstable(feature_name)]` or `#[unstable(feature = "name")]`
+/// Feature names are accepted as either `#[unstable(feature_name)]` or `#[unstable(feature = "name")]`.
+///
 /// If no name was given `unstable` is assumed.
 ///
 /// The defining crate is allowed to use functions marked as unstable even when the feature is disabled.

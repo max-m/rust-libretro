@@ -1,3 +1,6 @@
+//! The [`CoreWrapper`] is an _internal_ data structure.
+//!
+//! It stores runtime information provided by the libretro frontend without interfering with your [`Core`] implementation.
 use crate::*;
 
 /// Holds the core instance as well as runtime information from the libretro frontend.

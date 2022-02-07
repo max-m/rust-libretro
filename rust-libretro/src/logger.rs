@@ -1,3 +1,4 @@
+//! [`log::Log`] implementation using the libretro logging interface.
 use super::*;
 use log::{Level, Metadata, Record};
 use std::io::Write;

@@ -1,3 +1,4 @@
+//! This module contains abstractions of the libretro environment callbacks.
 use super::*;
 
 #[doc(hidden)]
@@ -56,12 +57,14 @@ impl<'a> GenericContext<'a> {
         self.environment_callback
     }
 
+    /// Enables the [`Core::on_keyboard_event`] callback.
     pub fn enable_keyboard_callback(&self) -> bool {
         self.set_keyboard_callback(retro_keyboard_callback {
             callback: Some(retro_keyboard_callback_fn),
         })
     }
 
+    /// Enables the [`Core::on_write_audio`] and [`Core::on_audio_set_state`] callbacks.
     pub fn enable_audio_callback(&self) -> bool {
         self.set_audio_callback(retro_audio_callback {
             callback: Some(retro_audio_callback_fn),
@@ -116,26 +119,47 @@ impl<'a> GenericContext<'a> {
     }
 }
 
+/// Functions that are safe to be called in [`Core::on_reset`].
 pub type ResetContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::on_deinit`].
 pub type DeinitContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::get_serialize_size`].
 pub type GetSerializeSizeContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::on_serialize`].
 pub type SerializeContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::on_unserialize`].
 pub type UnserializeContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::on_unload_game`].
 pub type UnloadGameContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::on_cheat_reset`].
 pub type CheatResetContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::on_cheat_set`].
 pub type CheatSetContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::on_get_region`].
 pub type GetRegionContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::get_memory_data`].
 pub type GetMemoryDataContext<'a> = GenericContext<'a>;
+
+/// Functions that are safe to be called in [`Core::get_memory_size`].
 pub type GetMemorySizeContext<'a> = GenericContext<'a>;
 
-make_context!(GetAvInfoContext);
-make_context!(InitContext);
-make_context!(OptionsChangedContext);
+make_context!(GetAvInfoContext, #[doc = "Functions that are safe to be called in [`Core::on_get_av_info`]"]);
+make_context!(InitContext, #[doc = "Functions that are safe to be called in [`Core::on_init`]"]);
+make_context!(OptionsChangedContext, #[doc = "Functions that are safe to be called in [`Core::on_options_changed`]"]);
 
-make_context!(LoadGameSpecialContext);
+make_context!(LoadGameSpecialContext, #[doc = "Functions that are safe to be called in [`Core::on_load_game_special`]"]);
 // into_generic!(LoadGameSpecialContext<'a>, LoadGameContext, 'a);
 
-make_context!(SetEnvironmentContext);
+make_context!(SetEnvironmentContext, #[doc = "Functions that are safe to be called in [`Core::on_set_environment`]"]);
 
 impl<'a> SetEnvironmentContext<'a> {
     pub fn enable_proc_address_interface(&mut self) -> bool {
@@ -145,6 +169,9 @@ impl<'a> SetEnvironmentContext<'a> {
     }
 }
 
+/// Functions that are safe to be called in [`Core::on_load_game`].
+///
+/// For a description of the callbacks see [`CoreWrapper`].
 pub struct LoadGameContext<'a> {
     pub(crate) environment_callback: &'a retro_environment_t,
 
@@ -267,6 +294,9 @@ impl<'a> LoadGameContext<'a> {
 }
 into_generic!(LoadGameContext<'a>, 'a);
 
+/// Functions that are safe to be called in [`Core::on_write_audio`].
+///
+/// For a description of the callbacks see [`CoreWrapper`].
 pub struct AudioContext<'a> {
     pub(crate) environment_callback: &'a retro_environment_t,
 
@@ -307,7 +337,7 @@ impl AudioContext<'_> {
 
 into_generic!(AudioContext<'a>, 'a);
 
-/// Exposes callbacks that are safe to call in [`Core::on_run`]
+/// Functions that are safe to be called in [`Core::on_run`].
 ///
 /// For a description of the callbacks see [`CoreWrapper`].
 pub struct RunContext<'a> {

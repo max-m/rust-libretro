@@ -1,4 +1,4 @@
-//! Unsafe functions related to the libretro environment callback
+//! Unsafe functions related to the libretro environment callback.
 //! For safe versions have a look at the [`contexts`] module and
 //! the context types you get in your core callbacks.
 use super::{types::*, *};
@@ -321,7 +321,7 @@ pub unsafe fn get_variable<'a>(callback: retro_environment_t, key: &'a str) -> O
 ///
 /// First entry should be treated as a default.
 ///
-/// Example entry:
+/// # Examples
 /// ```
 /// # use rust_libretro_sys::retro_variable;
 /// retro_variable {
@@ -331,7 +331,7 @@ pub unsafe fn get_variable<'a>(callback: retro_environment_t, key: &'a str) -> O
 /// # ;
 /// ```
 ///
-/// Text before first `;` is description. This `;` must be
+/// Text before the first `;` is a description. This `;` must be
 /// followed by a space, and followed by a list of possible
 /// values split up with `|`.
 ///
@@ -822,9 +822,16 @@ pub unsafe fn get_current_software_framebuffer(
     get_unchecked(callback, RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER).map(|(v, _)| v)
 }
 
-/// TODO: GET_HW_RENDER_INTERFACE cannot be called before context_reset has been called.
-///       Similarly, after context_destroyed callback returns,
-///       the contents of the HW_RENDER_INTERFACE are invalidated.
+/// Returns an API specific rendering interface for accessing API specific data.
+/// Not all HW rendering APIs support or need this.
+/// The contents of the returned pointer is specific to the rendering API
+/// being used. See the various headers like libretro_vulkan.h, etc.
+///
+/// [`get_hw_render_interface`] cannot be called before [`retro_hw_context_reset_callback`] has been called.
+///
+/// Similarly, after [`retro_hw_context_destroyed_callback`] returns, the contents of the HW_RENDER_INTERFACE are invalidated.
+///
+/// **TODO:** Set a status flag in [`retro_hw_context_reset_callback`] and [`retro_hw_context_destroyed_callback`] to force the mentioned call restrictions.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn get_hw_render_interface(
@@ -1083,7 +1090,7 @@ pub unsafe fn supports_set_core_options_v2(callback: retro_environment_t) -> boo
 /// i.e. it should be feasible to cycle through options
 /// without a keyboard.
 ///
-/// Example entry:
+/// # Examples
 /// ```c
 /// {
 ///     "foo_option",
@@ -1174,7 +1181,7 @@ pub unsafe fn set_core_options(
 ///   user may need to understand the nature of the core option
 ///   category.
 ///
-/// ### Example entry:
+/// ### Examples
 /// ```c
 /// {
 ///     "advanced_settings",
@@ -1254,7 +1261,7 @@ pub unsafe fn set_core_options(
 /// i.e. it should be feasible to cycle through options
 /// without a keyboard.
 ///
-/// ### Example entries:
+/// ### Examples
 ///
 /// - Uncategorized:
 ///
