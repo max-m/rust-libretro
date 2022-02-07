@@ -1,4 +1,4 @@
-use rust_libretro::{contexts::*, sys::*, types::*, *};
+use rust_libretro::{contexts::*, core::Core, proc::*, retro_core, sys::*, types::*};
 use std::ffi::CString;
 
 // TODO: Write a neater abstraction / macro

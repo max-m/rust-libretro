@@ -561,7 +561,7 @@ fn impl_derive_core_options(input: DeriveInput) -> TokenStream {
         .collect::<Vec<_>>();
 
     let expanded = quote! {
-        impl #impl_generics ::rust_libretro::CoreOptions for #name #ty_generics #where_clause {
+        impl #impl_generics ::rust_libretro::core::CoreOptions for #name #ty_generics #where_clause {
             fn set_core_options(&self, ctx: &SetEnvironmentContext) -> bool {
                 let gctx: GenericContext = ctx.into();
 

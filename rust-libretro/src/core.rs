@@ -17,7 +17,7 @@ pub trait CoreOptions {
 
 /// This trait defines the basic functions that every libretro core must implement.
 /// See also [`retro_core!()`].
-pub trait Core : CoreOptions {
+pub trait Core: CoreOptions {
     /// Returns static info about this core.
     fn get_info(&self) -> SystemInfo;
 

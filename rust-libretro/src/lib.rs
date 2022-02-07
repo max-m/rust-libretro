@@ -4,31 +4,25 @@
     html_favicon_url = "https://raw.githubusercontent.com/max-m/rust-libretro/master/media/favicon.png"
 )]
 
-mod core;
 mod core_wrapper;
 #[cfg(feature = "log")]
 mod logger;
 
 pub mod contexts;
+pub mod core;
 pub mod environment;
 pub mod types;
 pub mod util;
 
 pub use rust_libretro_proc as proc;
 pub use rust_libretro_sys as sys;
-pub use crate::core::*;
-pub use proc::*;
 
-use contexts::*;
-use core_wrapper::*;
+use crate::{contexts::*, core::Core, core_wrapper::CoreWrapper, sys::*, types::*, util::*};
 use std::{
     ffi::*,
     os::raw::c_char,
     path::{Path, PathBuf},
 };
-use sys::*;
-use types::*;
-use util::*;
 
 #[doc(hidden)]
 static mut RETRO_INSTANCE: Option<CoreWrapper> = None;
@@ -37,7 +31,7 @@ static mut RETRO_INSTANCE: Option<CoreWrapper> = None;
 ///
 /// # Examples
 /// ```rust
-/// # use rust_libretro::{contexts::*, sys::*, types::*, *};
+/// # use rust_libretro::{contexts::*, core::{Core, CoreOptions}, sys::*, types::*, retro_core};
 /// # use std::ffi::CString;
 /// struct ExampleCore {
 ///     option_1: bool,
