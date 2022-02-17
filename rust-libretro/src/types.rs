@@ -1,5 +1,6 @@
 //! Rust versions of libretro data structures.
 use super::*;
+use std::collections::HashMap;
 
 /// Static information about the [`Core`] implementation.
 #[derive(Debug, Default)]
@@ -166,6 +167,33 @@ bitflags::bitflags! {
     }
 }
 
+bitflags::bitflags! {
+    pub struct CpuFeatures: u64 {
+        const SSE = RETRO_SIMD_SSE as u64;
+        const SSE2 = RETRO_SIMD_SSE2 as u64;
+        const VMX = RETRO_SIMD_VMX as u64;
+        const VMX128 = RETRO_SIMD_VMX128 as u64;
+        const AVX = RETRO_SIMD_AVX as u64;
+        const NEON = RETRO_SIMD_NEON as u64;
+        const SSE3 = RETRO_SIMD_SSE3 as u64;
+        const SSSE3 = RETRO_SIMD_SSSE3 as u64;
+        const MMX = RETRO_SIMD_MMX as u64;
+        const MMXEXT = RETRO_SIMD_MMXEXT as u64;
+        const SSE4 = RETRO_SIMD_SSE4 as u64;
+        const SSE42 = RETRO_SIMD_SSE42 as u64;
+        const AVX2 = RETRO_SIMD_AVX2 as u64;
+        const VFPU = RETRO_SIMD_VFPU as u64;
+        const PS = RETRO_SIMD_PS as u64;
+        const AES = RETRO_SIMD_AES as u64;
+        const VFPV3 = RETRO_SIMD_VFPV3 as u64;
+        const VFPV4 = RETRO_SIMD_VFPV4 as u64;
+        const POPCNT = RETRO_SIMD_POPCNT as u64;
+        const MOVBE = RETRO_SIMD_MOVBE as u64;
+        const CMOV = RETRO_SIMD_CMOV as u64;
+        const ASIMD = RETRO_SIMD_ASIMD as u64;
+    }
+}
+
 /// Used in [`environment::set_message_ext`] to signal some ongoing progress.
 pub enum MessageProgress {
     /// The message is unmetered or the progress cannot be determined.
@@ -223,6 +251,28 @@ impl Rotation {
             Rotation::CounterClockwise270 => 3,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct PerfCounter {
+    #[allow(unused)]
+    // Borrowed by the `retro_perf_counter`.
+    pub(crate) ident: CString,
+    pub(crate) counter: retro_perf_counter,
+}
+
+#[derive(Debug, Default)]
+pub struct PerfCounters {
+    pub interface: Option<retro_perf_callback>,
+    pub counters: HashMap<&'static str, PerfCounter>,
+}
+
+#[derive(Debug, Default)]
+pub struct Position {
+    pub lat: f64,
+    pub lon: f64,
+    pub horiz_accuracy: f64,
+    pub vert_accuracy: f64,
 }
 
 /// Data structures used by experimental libretro environment function calls
@@ -292,6 +342,43 @@ pub mod unstable {
             const R2     = 0b0010_0000_0000_0000;
             const L3     = 0b0100_0000_0000_0000;
             const R3     = 0b1000_0000_0000_0000;
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct VfsInterfaceInfo {
+        pub(crate) supported_version: u32,
+        pub(crate) interface: Option<rust_libretro_sys::retro_vfs_interface>,
+    }
+
+    bitflags::bitflags! {
+        pub struct VfsFileOpenFlags: u32 {
+            const READ = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_READ;
+            const WRITE = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_WRITE;
+            const READ_WRITE = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_READ_WRITE;
+            const UPDATE_EXISTING = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
+        }
+    }
+
+    bitflags::bitflags! {
+        pub struct VfsFileOpenHints: u32 {
+            const NONE = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_HINT_NONE;
+            const FREQUENT_ACCESS = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS;
+        }
+    }
+
+    #[repr(i32)]
+    pub enum VfsSeekPosition {
+        Start = rust_libretro_sys::RETRO_VFS_SEEK_POSITION_START as i32,
+        Current = rust_libretro_sys::RETRO_VFS_SEEK_POSITION_CURRENT as i32,
+        End = rust_libretro_sys::RETRO_VFS_SEEK_POSITION_END as i32,
+    }
+
+    bitflags::bitflags! {
+        pub struct VfsStat: i32 {
+            const STAT_IS_VALID = rust_libretro_sys::RETRO_VFS_STAT_IS_VALID as i32;
+            const STAT_IS_DIRECTORY = rust_libretro_sys::RETRO_VFS_STAT_IS_DIRECTORY as i32;
+            const STAT_IS_CHARACTER_SPECIAL = rust_libretro_sys::RETRO_VFS_STAT_IS_CHARACTER_SPECIAL as i32;
         }
     }
 }

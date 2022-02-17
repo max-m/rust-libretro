@@ -184,7 +184,124 @@ pub trait Core: CoreOptions {
         // Do nothing
     }
 
+    /// **TODO:** Documentation
     fn on_audio_set_state(&mut self, _enabled: bool) {
         // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_audio_buffer_status(&mut self, _active: bool, _occupancy: u32, _underrun_likely: bool) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_hw_context_reset(&mut self) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_hw_context_destroyed(&mut self) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_get_proc_address(&mut self, _symbol_name: &CStr) -> retro_proc_address_t {
+        None
+    }
+
+    /// **TODO:** Documentation
+    fn on_location_lifetime_status_initialized(&mut self, _ctx: &mut GenericContext) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_location_lifetime_status_deinitialized(&mut self, _ctx: &mut GenericContext) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_camera_initialized(&mut self, _ctx: &mut GenericContext) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_camera_deinitialized(&mut self, _ctx: &mut GenericContext) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_camera_raw_framebuffer(
+        &mut self,
+        _buffer: &[u32],
+        _width: u32,
+        _height: u32,
+        _pitch: usize,
+    ) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_camera_gl_texture(
+        &mut self,
+        _texture_id: u32,
+        _texture_target: u32,
+        _affine_matrix: &[f32; 3 * 3],
+    ) {
+        // Do nothing
+    }
+
+    /// **TODO:** Documentation
+    fn on_set_eject_state(&mut self, _ejected: bool) -> bool {
+        false
+    }
+
+    /// **TODO:** Documentation
+    fn on_get_eject_state(&mut self) -> bool {
+        false
+    }
+
+    /// **TODO:** Documentation
+    fn on_get_image_index(&mut self) -> u32 {
+        0
+    }
+
+    /// **TODO:** Documentation
+    fn on_set_image_index(&mut self, _index: u32) -> bool {
+        false
+    }
+
+    /// **TODO:** Documentation
+    fn on_get_num_images(&mut self) -> u32 {
+        0
+    }
+
+    /// **TODO:** Documentation
+    fn on_replace_image_index(&mut self, _index: u32, _info: *const retro_game_info) -> bool {
+        false
+    }
+
+    /// **TODO:** Documentation
+    fn on_add_image_index(&mut self) -> bool {
+        false
+    }
+
+    /// **TODO:** Documentation
+    fn on_set_initial_image(&mut self, _index: u32, _path: &CStr) -> bool {
+        false
+    }
+
+    /// **TODO:** Documentation
+    fn on_get_image_path(&mut self, _index: u32) -> Option<CString> {
+        None
+    }
+
+    /// **TODO:** Documentation
+    fn on_get_image_label(&mut self, _index: u32) -> Option<CString> {
+        None
+    }
+
+    /// **TODO:** Documentation
+    fn on_core_options_update_display(&mut self) -> bool {
+        false
     }
 }

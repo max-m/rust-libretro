@@ -22,6 +22,7 @@ use std::{
     ffi::*,
     os::raw::c_char,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 #[doc(hidden)]
@@ -181,14 +182,14 @@ forward!(
     wrapper,
     retro_cheat_reset,
     on_cheat_reset,
-    GenericContext::new(&wrapper.environment_callback)
+    GenericContext::new(&wrapper.environment_callback, Arc::clone(&wrapper.interfaces))
 );
 forward!(
     #[doc = "Notifies the [`Core`] when it is being closed and its resources should be freed."],
     wrapper,
     retro_deinit,
     on_deinit,
-    GenericContext::new(&wrapper.environment_callback)
+    GenericContext::new(&wrapper.environment_callback, Arc::clone(&wrapper.interfaces))
 );
 forward!(
     #[doc = "Called when the frontend needs region information from the [`Core`]."],
@@ -198,14 +199,14 @@ forward!(
     wrapper,
     retro_get_region,
     on_get_region -> std::os::raw::c_uint,
-    GenericContext::new(&wrapper.environment_callback)
+    GenericContext::new(&wrapper.environment_callback, Arc::clone(&wrapper.interfaces))
 );
 forward!(
     #[doc = "Notifies the [`Core`] when the current game should be reset."],
     wrapper,
     retro_reset,
     on_reset,
-    GenericContext::new(&wrapper.environment_callback)
+    GenericContext::new(&wrapper.environment_callback, Arc::clone(&wrapper.interfaces))
 );
 forward!(
     #[doc = "Called when the frontend needs to know how large a buffer to allocate for save states."],
@@ -214,14 +215,14 @@ forward!(
     wrapper,
     retro_serialize_size,
     get_serialize_size -> size_t,
-    GenericContext::new(&wrapper.environment_callback)
+    GenericContext::new(&wrapper.environment_callback, Arc::clone(&wrapper.interfaces))
 );
 forward!(
     #[doc = "Notifies the [`Core`] when the currently loaded game should be unloaded. Called before [`retro_deinit`]."],
     wrapper,
     retro_unload_game,
     on_unload_game,
-    GenericContext::new(&wrapper.environment_callback)
+    GenericContext::new(&wrapper.environment_callback, Arc::clone(&wrapper.interfaces))
 );
 
 callback!(
@@ -268,6 +269,9 @@ callback!(
 /// Tells the frontend which API version this [`Core`] implements.
 #[no_mangle]
 pub unsafe extern "C" fn retro_api_version() -> std::os::raw::c_uint {
+    #[cfg(feature = "log")]
+    log::trace!("retro_api_version()");
+
     RETRO_API_VERSION
 }
 
@@ -276,15 +280,21 @@ pub unsafe extern "C" fn retro_api_version() -> std::os::raw::c_uint {
 /// Called after the environment callbacks have been set.
 #[no_mangle]
 pub unsafe extern "C" fn retro_init() {
+    #[cfg(feature = "log")]
+    log::trace!("retro_init()");
+
     if let Some(mut wrapper) = RETRO_INSTANCE.as_mut() {
         wrapper.can_dupe = environment::can_dupe(wrapper.environment_callback);
 
-        let mut ctx = InitContext::new(&wrapper.environment_callback);
+        let mut ctx = InitContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
-        wrapper.core.on_init(&mut ctx)
-    } else {
-        panic!("retro_init: Core has not been initialized yet!");
+        return wrapper.core.on_init(&mut ctx);
     }
+
+    panic!("retro_init: Core has not been initialized yet!");
 }
 
 /// Provides _statically known_ system info to the frontend.
@@ -292,6 +302,9 @@ pub unsafe extern "C" fn retro_init() {
 /// See also [`rust_libretro_sys::retro_get_system_info`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_system_info(info = {info:#?})");
+
     // Make sure that the pointer we got is plausible
     if info.is_null() {
         panic!("Expected retro_system_info, got NULL pointer instead!");
@@ -337,6 +350,9 @@ pub unsafe extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
 /// See also [`rust_libretro_sys::retro_get_system_av_info`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_info) {
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_system_av_info(info = {info:#?})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         // Make sure that the pointer we got is plausible
         if info.is_null() {
@@ -346,15 +362,20 @@ pub unsafe extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_inf
         // We didn’t get a NULL pointer, so this should be safe
         let info = &mut *info;
 
-        let mut ctx = GetAvInfoContext::new(&wrapper.environment_callback);
+        let mut ctx = GetAvInfoContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         let av_info = wrapper.core.on_get_av_info(&mut ctx);
 
         info.geometry = av_info.geometry;
         info.timing = av_info.timing;
-    } else {
-        panic!("retro_get_system_av_info: Core has not been initialized yet!");
+
+        return;
     }
+
+    panic!("retro_get_system_av_info: Core has not been initialized yet!");
 }
 
 /// Provides the environment callback to the [`Core`].
@@ -364,6 +385,9 @@ pub unsafe extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_inf
 /// **TODO:** This method seems to get called multiple times by RetroArch
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t) {
+    #[cfg(feature = "log")]
+    log::trace!("retro_set_environment(environment = {environment:#?})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         let mut initial = false;
 
@@ -386,7 +410,10 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
             wrapper.environment_callback.take();
         }
 
-        let mut ctx = SetEnvironmentContext::new(&wrapper.environment_callback);
+        let mut ctx = SetEnvironmentContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         // Our default implementation of `set_core_options` uses `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION`,
         // which seems to only work on the first call to `retro_set_environment`.
@@ -395,8 +422,10 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
             log::warn!("Failed to set core options");
         }
 
-        wrapper.core.on_set_environment(initial, &mut ctx);
+        return wrapper.core.on_set_environment(initial, &mut ctx);
     }
+
+    panic!("retro_set_environment: Core has not been initialized yet!");
 }
 
 /// Sets the device type to be used for player `port`.
@@ -407,6 +436,9 @@ pub unsafe extern "C" fn retro_set_controller_port_device(
     port: std::os::raw::c_uint,
     device: std::os::raw::c_uint,
 ) {
+    #[cfg(feature = "log")]
+    log::trace!("retro_set_controller_port_device(port = {port}, device = {device})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         return wrapper.core.on_set_controller_port_device(port, device);
     }
@@ -419,9 +451,15 @@ pub unsafe extern "C" fn retro_set_controller_port_device(
 /// See also [`rust_libretro_sys::retro_run`].
 #[no_mangle]
 pub unsafe extern "C" fn retro_run() {
+    #[cfg(feature = "log")]
+    log::trace!("retro_run()");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         if environment::get_variable_update(wrapper.environment_callback) {
-            let mut ctx = OptionsChangedContext::new(&wrapper.environment_callback);
+            let mut ctx = OptionsChangedContext::new(
+                &wrapper.environment_callback,
+                Arc::clone(&wrapper.interfaces),
+            );
 
             wrapper.core.on_options_changed(&mut ctx);
         }
@@ -432,6 +470,7 @@ pub unsafe extern "C" fn retro_run() {
 
         let mut ctx = RunContext {
             environment_callback: &wrapper.environment_callback,
+            interfaces: Arc::clone(&wrapper.interfaces),
 
             video_refresh_callback: &wrapper.video_refresh_callback,
             audio_sample_callback: &wrapper.audio_sample_callback,
@@ -460,6 +499,9 @@ pub unsafe extern "C" fn retro_run() {
 /// This could also be used by a frontend to implement rewind.
 #[no_mangle]
 pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: size_t) -> bool {
+    #[cfg(feature = "log")]
+    log::trace!("retro_serialize(data = {data:#?}, size = {size})");
+
     if data.is_null() {
         #[cfg(feature = "log")]
         log::warn!("retro_serialize: data is null");
@@ -468,7 +510,10 @@ pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: 
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut ctx = GenericContext::new(&wrapper.environment_callback);
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         // Convert the given buffer into a proper slice
         let slice = std::slice::from_raw_parts_mut(data as *mut u8, size as usize);
@@ -488,6 +533,9 @@ pub unsafe extern "C" fn retro_unserialize(
     data: *const std::os::raw::c_void,
     size: size_t,
 ) -> bool {
+    #[cfg(feature = "log")]
+    log::trace!("retro_unserialize(data = {data:#?}, size = {size})");
+
     if data.is_null() {
         #[cfg(feature = "log")]
         log::warn!("retro_unserialize: data is null");
@@ -496,7 +544,10 @@ pub unsafe extern "C" fn retro_unserialize(
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut ctx = GenericContext::new(&wrapper.environment_callback);
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         // Convert the given buffer into a proper slice
         let slice = std::slice::from_raw_parts_mut(data as *mut u8, size as usize);
@@ -517,6 +568,9 @@ pub unsafe extern "C" fn retro_cheat_set(
     enabled: bool,
     code: *const std::os::raw::c_char,
 ) {
+    #[cfg(feature = "log")]
+    log::trace!("retro_cheat_set(index = {index}, enabled = {enabled}, code = {code:#?})");
+
     if code.is_null() {
         #[cfg(feature = "log")]
         log::warn!("retro_cheat_set: code is null");
@@ -525,7 +579,10 @@ pub unsafe extern "C" fn retro_cheat_set(
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut ctx = GenericContext::new(&wrapper.environment_callback);
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         // Wrap the pointer into a `CStr`.
         // This assumes the pointer is valid and ends on a null byte.
@@ -546,19 +603,20 @@ pub unsafe extern "C" fn retro_cheat_set(
 /// A return value of [`true`] indicates success.
 #[no_mangle]
 pub unsafe extern "C" fn retro_load_game(game: *const retro_game_info) -> bool {
+    #[cfg(feature = "log")]
+    log::trace!("retro_load_game(game_type = {game:#?})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut ctx = OptionsChangedContext::new(&wrapper.environment_callback);
+        let mut ctx = OptionsChangedContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         wrapper.core.on_options_changed(&mut ctx);
 
         let mut ctx = LoadGameContext::new(
             &wrapper.environment_callback,
-            &mut wrapper.camera_interface,
-            &mut wrapper.perf_interface,
-            &mut wrapper.location_interface,
-            &mut wrapper.rumble_interface,
-            #[cfg(feature = "unstable-env-commands")]
-            &mut wrapper.sensor_interface,
+            Arc::clone(&wrapper.interfaces),
         );
 
         let status = if game.is_null() {
@@ -580,6 +638,11 @@ pub unsafe extern "C" fn retro_load_game_special(
     info: *const retro_game_info,
     num_info: size_t,
 ) -> bool {
+    #[cfg(feature = "log")]
+    log::trace!(
+        "retro_load_game_special(game_type = {game_type}, info = {info:#?}, num_info = {num_info})"
+    );
+
     if info.is_null() {
         #[cfg(feature = "log")]
         log::warn!("retro_load_game_special: info is null");
@@ -588,11 +651,17 @@ pub unsafe extern "C" fn retro_load_game_special(
     }
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut ctx = OptionsChangedContext::new(&wrapper.environment_callback);
+        let mut ctx = OptionsChangedContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         wrapper.core.on_options_changed(&mut ctx);
 
-        let mut ctx = LoadGameSpecialContext::new(&wrapper.environment_callback);
+        let mut ctx = LoadGameSpecialContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         let status = wrapper
             .core
@@ -612,8 +681,14 @@ pub unsafe extern "C" fn retro_load_game_special(
 pub unsafe extern "C" fn retro_get_memory_data(
     id: std::os::raw::c_uint,
 ) -> *mut std::os::raw::c_void {
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_memory_data(id = {id})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut ctx = GenericContext::new(&wrapper.environment_callback);
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         return wrapper.core.get_memory_data(id, &mut ctx);
     }
@@ -627,8 +702,14 @@ pub unsafe extern "C" fn retro_get_memory_data(
 /// `id` is one of the `RETRO_MEMORY_*` constants.
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_memory_size(id: std::os::raw::c_uint) -> size_t {
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_memory_size(id = {id})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut ctx = GenericContext::new(&wrapper.environment_callback);
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
 
         return wrapper.core.get_memory_size(id, &mut ctx);
     }
@@ -640,6 +721,13 @@ pub unsafe extern "C" fn retro_get_memory_size(id: std::os::raw::c_uint) -> size
 |                            NON CORE API FUNCTIONS                           |
 \*****************************************************************************/
 
+/// If enabled by the [`Core`], notifies it when a keyboard button has been pressed or released.
+///
+/// # Parameters
+/// - `down`: `true` if the key has been pressed, `false` if it has been released
+/// - `keycode`: `retro_key` value
+/// - `character`: The text character of the pressed key, encoded as UTF-32.
+/// - `key_modifiers`: `retro_mod` value
 #[no_mangle]
 pub unsafe extern "C" fn retro_keyboard_callback_fn(
     down: bool,
@@ -647,150 +735,255 @@ pub unsafe extern "C" fn retro_keyboard_callback_fn(
     character: u32,
     key_modifiers: u16,
 ) {
-    cfg_if::cfg_if! {
-        if #[cfg(target_family = "windows")] {
-            let keycode = keycode as i32;
-        }
-    };
+    #[cfg(feature = "log")]
+    log::trace!("retro_keyboard_callback_fn(down = {down}, keycode = {keycode}, character = {character}, key_modifiers = {key_modifiers})");
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        wrapper.core.on_keyboard_event(
+        // Not sure why bindgen uses `c_int32` as value type
+        // for the newtype enum on Windows but `c_uint32` on Unix.
+        cfg_if::cfg_if! {
+            if #[cfg(target_family = "windows")] {
+                let keycode = keycode as i32;
+            }
+        };
+
+        return wrapper.core.on_keyboard_event(
             down,
             retro_key(keycode),
             character,
             retro_mod(key_modifiers.into()),
-        )
+        );
     }
+
+    panic!("retro_keyboard_callback_fn: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation.
 #[no_mangle]
 pub unsafe extern "C" fn retro_hw_context_reset_callback() {
-    println!("TODO: retro_hw_context_reset_callback")
+    #[cfg(feature = "log")]
+    log::trace!("retro_hw_context_reset_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_hw_context_reset();
+    }
+
+    panic!("retro_hw_context_reset_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation.
 #[no_mangle]
 pub unsafe extern "C" fn retro_hw_context_destroyed_callback() {
-    println!("TODO: retro_hw_context_destroyed_callback")
+    #[cfg(feature = "log")]
+    log::trace!("retro_hw_context_destroyed_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_hw_context_destroyed();
+    }
+
+    panic!("retro_hw_context_destroyed_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_eject_state_callback(ejected: bool) -> bool {
-    dbg!(ejected);
-    println!("TODO: retro_set_eject_state_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_set_eject_state_callback(ejected = {ejected})");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_set_eject_state(ejected);
+    }
+
+    panic!("retro_set_eject_state_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_eject_state_callback() -> bool {
-    println!("TODO: retro_get_eject_state_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_eject_state_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_get_eject_state();
+    }
+
+    panic!("retro_get_eject_state_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_image_index_callback() -> ::std::os::raw::c_uint {
-    println!("TODO: retro_get_image_index_callback");
-    0
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_image_index_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_get_image_index();
+    }
+
+    panic!("retro_get_image_index_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_image_index_callback(index: ::std::os::raw::c_uint) -> bool {
-    dbg!(index);
-    println!("TODO: retro_set_image_index_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_set_image_index_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_set_image_index(index);
+    }
+
+    panic!("retro_set_image_index_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_num_images_callback() -> ::std::os::raw::c_uint {
-    println!("TODO: retro_get_num_images_callback");
-    0
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_num_images_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_get_num_images();
+    }
+
+    panic!("retro_get_num_images_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_replace_image_index_callback(
     index: ::std::os::raw::c_uint,
     info: *const retro_game_info,
 ) -> bool {
-    dbg!(index);
-    dbg!(info);
-    println!("TODO: retro_replace_image_index_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_replace_image_index_callback(index = {index}, info = {info:#?})");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_replace_image_index(index, info);
+    }
+
+    panic!("retro_replace_image_index_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_add_image_index_callback() -> bool {
-    println!("TODO: retro_add_image_index_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_add_image_index_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_add_image_index();
+    }
+
+    panic!("retro_add_image_index_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_set_initial_image_callback(
     index: ::std::os::raw::c_uint,
     path: *const ::std::os::raw::c_char,
 ) -> bool {
-    dbg!(index);
-    dbg!(path);
-    println!("TODO: retro_set_initial_image_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_set_initial_image_callback(index = {index}, path = {path:#?})");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper
+            .core
+            .on_set_initial_image(index, CStr::from_ptr(path));
+    }
+
+    panic!("retro_set_initial_image_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_image_path_callback(
     index: ::std::os::raw::c_uint,
     path: *mut ::std::os::raw::c_char,
     len: size_t,
 ) -> bool {
-    dbg!(index);
-    dbg!(path);
-    dbg!(len);
-    println!("TODO: retro_get_image_path_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_image_path_callback(index = {index}, path = {path:#?}, len = {len})");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        match wrapper.core.on_get_image_path(index) {
+            Some(image_path) => {
+                let image_path = image_path.as_bytes();
+                let buf = std::slice::from_raw_parts_mut(path as *mut u8, len as usize);
+                let len = image_path.len().min(buf.len());
+
+                buf[..len].copy_from_slice(&image_path[..len]);
+                return true;
+            }
+            None => return false,
+        }
+    }
+
+    panic!("retro_get_image_path_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_image_label_callback(
     index: ::std::os::raw::c_uint,
     label: *mut ::std::os::raw::c_char,
     len: size_t,
 ) -> bool {
-    dbg!(index);
-    dbg!(label);
-    dbg!(len);
-    println!("TODO: retro_get_image_label_callback");
-    false
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_image_label_callback(index = {index}, label = {label:#?}, len = {len})");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        match wrapper.core.on_get_image_label(index) {
+            Some(image_label) => {
+                let image_label = image_label.as_bytes();
+                let buf = std::slice::from_raw_parts_mut(label as *mut u8, len as usize);
+                let len = image_label.len().min(buf.len());
+
+                buf[..len].copy_from_slice(&image_label[..len]);
+                return true;
+            }
+            None => return false,
+        }
+    }
+
+    panic!("retro_get_image_label_callback: Core has not been initialized yet!");
 }
 
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_frame_time_callback_fn(usec: retro_usec_t) {
+    #[cfg(feature = "log")]
+    log::trace!("retro_frame_time_callback_fn(usec = {usec})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        wrapper.frame_delta = Some(usec)
+        wrapper.frame_delta = Some(usec);
+        return;
     }
+
+    panic!("retro_frame_time_callback_fn: Core has not been initialized yet!");
 }
 
 /// Notifies the [`Core`] when audio data should be written.
 #[no_mangle]
 pub unsafe extern "C" fn retro_audio_callback_fn() {
+    // This is just too noisy, even for trace logging
+    // #[cfg(feature = "log")]
+    // log::trace!("retro_audio_callback_fn()");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         let mut ctx = AudioContext {
             environment_callback: &wrapper.environment_callback,
+            interfaces: Arc::clone(&wrapper.interfaces),
 
             audio_sample_callback: &wrapper.audio_sample_callback,
             audio_sample_batch_callback: &wrapper.audio_sample_batch_callback,
         };
 
-        wrapper.core.on_write_audio(&mut ctx);
+        return wrapper.core.on_write_audio(&mut ctx);
     }
+
+    panic!("retro_audio_callback_fn: Core has not been initialized yet!");
 }
 
 /// Notifies the [`Core`] about the state of the frontend’s audio system.
@@ -806,12 +999,17 @@ pub unsafe extern "C" fn retro_audio_callback_fn() {
 /// Initial state is [`false`] (inactive).
 #[no_mangle]
 pub unsafe extern "C" fn retro_audio_set_state_callback_fn(enabled: bool) {
+    #[cfg(feature = "log")]
+    log::trace!("retro_audio_set_state_callback_fn(enabled = {enabled})");
+
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        wrapper.core.on_audio_set_state(enabled);
+        return wrapper.core.on_audio_set_state(enabled);
     }
+
+    panic!("retro_audio_set_state_callback_fn: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_frame_raw_framebuffer_callback(
     buffer: *const u32,
@@ -819,69 +1017,168 @@ pub unsafe extern "C" fn retro_camera_frame_raw_framebuffer_callback(
     height: ::std::os::raw::c_uint,
     pitch: size_t,
 ) {
-    dbg!(buffer);
-    dbg!(width);
-    dbg!(height);
-    dbg!(pitch);
-    println!("TODO: retro_camera_frame_raw_framebuffer_callback")
+    let buffer_size = height as usize * pitch as usize;
+    let buffer = std::slice::from_raw_parts(buffer, buffer_size);
+
+    #[cfg(feature = "log")]
+    log::trace!("retro_camera_frame_raw_framebuffer_callback(buffer = &[u32; {}], width = {width}, height = {height}, pitch = {pitch})", buffer.len());
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper
+            .core
+            .on_camera_raw_framebuffer(buffer, width, height, pitch as usize);
+    }
+
+    panic!("retro_camera_frame_raw_framebuffer_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_frame_opengl_texture_callback(
     texture_id: ::std::os::raw::c_uint,
     texture_target: ::std::os::raw::c_uint,
     affine: *const f32,
 ) {
-    dbg!(texture_id);
-    dbg!(texture_target);
-    dbg!(affine);
-    println!("TODO: retro_camera_frame_opengl_texture_callback")
+    #[cfg(feature = "log")]
+    log::trace!("retro_camera_frame_opengl_texture_callback(texture_id = {texture_id}, texture_target = {texture_target}, affine = {:#?})", std::slice::from_raw_parts(affine, 3 * 3));
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        // Packed 3x3 column-major matrix
+        let matrix = std::slice::from_raw_parts(affine, 3 * 3);
+        // Convert to fixed size array; we know it contains 9 elements
+        let matrix: &[f32; 3 * 3] = matrix.try_into().unwrap();
+
+        return wrapper
+            .core
+            .on_camera_gl_texture(texture_id, texture_target, matrix);
+    }
+
+    panic!("retro_camera_frame_opengl_texture_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_initialized_callback() {
-    println!("TODO: retro_camera_initialized_callback")
+    #[cfg(feature = "log")]
+    log::trace!("retro_camera_initialized_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
+
+        return wrapper.core.on_camera_initialized(&mut ctx);
+    }
+
+    panic!("retro_camera_initialized_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_camera_deinitialized_callback() {
-    println!("TODO: retro_camera_deinitialized_callback")
+    #[cfg(feature = "log")]
+    log::trace!("retro_camera_deinitialized_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
+
+        return wrapper.core.on_camera_deinitialized(&mut ctx);
+    }
+
+    panic!("retro_camera_deinitialized_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_location_lifetime_status_initialized_callback() {
-    println!("TODO: retro_location_lifetime_status_initialized_callback")
+    #[cfg(feature = "log")]
+    log::trace!("retro_location_lifetime_status_initialized_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
+
+        return wrapper
+            .core
+            .on_location_lifetime_status_initialized(&mut ctx);
+    }
+
+    panic!(
+        "retro_location_lifetime_status_initialized_callback: Core has not been initialized yet!"
+    );
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_location_lifetime_status_deinitialized_callback() {
-    println!("TODO: retro_location_lifetime_status_deinitialized_callback")
+    #[cfg(feature = "log")]
+    log::trace!("retro_location_lifetime_status_deinitialized_callback()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
+
+        return wrapper
+            .core
+            .on_location_lifetime_status_deinitialized(&mut ctx);
+    }
+
+    panic!(
+        "retro_location_lifetime_status_deinitialized_callback: Core has not been initialized yet!"
+    );
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_get_proc_address_callback(
     sym: *const ::std::os::raw::c_char,
 ) -> retro_proc_address_t {
-    dbg!(sym);
-    println!("TODO: retro_get_proc_address_callback");
-    None
+    #[cfg(feature = "log")]
+    log::trace!("retro_get_proc_address_callback({sym:#?})");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_get_proc_address(CStr::from_ptr(sym));
+    }
+
+    panic!("retro_get_proc_address_callback: Core has not been initialized yet!");
 }
 
-/// **TODO:** Not exposed to [`Core`] yet.
+/// **TODO:** Documentation
 #[no_mangle]
 pub unsafe extern "C" fn retro_audio_buffer_status_callback_fn(
     active: bool,
     occupancy: ::std::os::raw::c_uint,
     underrun_likely: bool,
 ) {
-    dbg!(active);
-    dbg!(occupancy);
-    dbg!(underrun_likely);
-    println!("TODO: retro_audio_buffer_status_callback_fn")
+    #[cfg(feature = "log")]
+    log::trace!("retro_audio_buffer_status_callback_fn(active = {active}, occupancy = {occupancy}, underrun_likely = {underrun_likely})");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper
+            .core
+            .on_audio_buffer_status(active, occupancy, underrun_likely);
+    }
+
+    panic!("retro_audio_buffer_status_callback_fn: Core has not been initialized yet!");
+}
+
+/// **TODO:** Documentation
+#[no_mangle]
+pub unsafe extern "C" fn retro_core_options_update_display_callback_fn() -> bool {
+    #[cfg(feature = "log")]
+    log::trace!("retro_core_options_update_display_callback_fn()");
+
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        return wrapper.core.on_core_options_update_display();
+    }
+
+    panic!("retro_core_options_update_display_callback_fn: Core has not been initialized yet!");
 }

@@ -1,4 +1,7 @@
 //! This module contains abstractions of the libretro environment callbacks.
+use crate::core_wrapper::Interfaces;
+use std::collections::HashMap;
+
 use super::*;
 
 #[doc(hidden)]
@@ -9,13 +12,13 @@ macro_rules! into_generic {
     ($type:ty, $other:ident, $lifetime:tt) => {
         impl<$lifetime> From<&$type> for $other<$lifetime> {
             fn from(other: &$type) -> $other<$lifetime> {
-                $other::new(other.environment_callback)
+                $other::new(other.environment_callback, Arc::clone(&other.interfaces))
             }
         }
 
         impl<$lifetime> From<&mut $type> for $other<$lifetime> {
             fn from(other: &mut $type) -> $other<$lifetime> {
-                $other::new(other.environment_callback)
+                $other::new(other.environment_callback, Arc::clone(&other.interfaces))
             }
         }
     };
@@ -27,12 +30,14 @@ macro_rules! make_context {
         $(#[doc = $doc])?
         pub struct $name<'a> {
             pub(crate) environment_callback: &'a retro_environment_t,
+            pub(crate) interfaces: Interfaces,
         }
 
         impl<'a> $name<'a> {
-            pub fn new(environment_callback: &'a retro_environment_t) -> Self {
+            pub(crate) fn new(environment_callback: &'a retro_environment_t, interfaces: Interfaces) -> Self {
                 Self {
-                    environment_callback
+                    environment_callback,
+                    interfaces
                 }
             }
         }
@@ -44,17 +49,26 @@ macro_rules! make_context {
 /// Exposes environment callbacks that are safe to call in every context.
 pub struct GenericContext<'a> {
     pub(crate) environment_callback: &'a retro_environment_t,
+    pub(crate) interfaces: Interfaces,
 }
 
 impl<'a> GenericContext<'a> {
-    pub fn new(environment_callback: &'a retro_environment_t) -> Self {
+    pub(crate) fn new(
+        environment_callback: &'a retro_environment_t,
+        interfaces: Interfaces,
+    ) -> Self {
         Self {
             environment_callback,
+            interfaces,
         }
     }
 
     pub unsafe fn environment_callback(&self) -> &'a retro_environment_t {
         self.environment_callback
+    }
+
+    pub unsafe fn interfaces(&self) -> Interfaces {
+        Arc::clone(&self.interfaces)
     }
 
     /// Enables the [`Core::on_keyboard_event`] callback.
@@ -117,6 +131,706 @@ impl<'a> GenericContext<'a> {
 
         self.set_audio_buffer_status_callback(data)
     }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn set_led_state(&self, led: i32, state: i32) {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.led_interface {
+            if let Some(set_led_state) = interface.set_led_state {
+                unsafe { set_led_state(led, state) };
+            }
+        }
+    }
+
+    pub fn set_rumble_state(&self, port: u32, effect: retro_rumble_effect, strength: u16) -> bool {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.rumble_interface {
+            if let Some(set_rumble_state) = interface.set_rumble_state {
+                return unsafe { set_rumble_state(port, effect, strength) };
+            }
+        }
+
+        false
+    }
+
+    pub fn start_perf_counter(&mut self, name: &'static str) {
+        let mut interfaces = self.interfaces.write().unwrap();
+
+        if let Some(interface) = interfaces.perf_interface.interface {
+            if let Some(start) = interface.perf_start {
+                if let Some(register) = interface.perf_register {
+                    let counter = interfaces
+                        .perf_interface
+                        .counters
+                        .entry(name)
+                        .or_insert_with(|| {
+                            let ident = CString::new(name).unwrap();
+                            let ptr = ident.as_ptr();
+
+                            PerfCounter {
+                                ident,
+                                counter: retro_perf_counter {
+                                    ident: ptr,
+                                    start: 0,
+                                    total: 0,
+                                    call_cnt: 0,
+                                    registered: false,
+                                },
+                            }
+                        });
+
+                    if !counter.counter.registered {
+                        unsafe {
+                            register(&mut counter.counter as *mut _);
+                        }
+                    }
+
+                    unsafe {
+                        start(&mut counter.counter as *mut _);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn stop_perf_counter(&mut self, name: &'static str) {
+        let mut interfaces = self.interfaces.write().unwrap();
+
+        if let Some(interface) = interfaces.perf_interface.interface {
+            if let Some(stop) = interface.perf_stop {
+                use std::collections::hash_map::Entry;
+
+                if let Entry::Occupied(counter) = interfaces.perf_interface.counters.entry(name) {
+                    let counter = counter.into_mut();
+
+                    if counter.counter.registered {
+                        unsafe {
+                            stop(&mut counter.counter as *mut _);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn perf_log(&self) {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.perf_interface.interface {
+            if let Some(log) = interface.perf_log {
+                unsafe {
+                    log();
+                }
+            }
+        }
+    }
+
+    pub fn perf_get_time_usec(&self) -> i64 {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.perf_interface.interface {
+            if let Some(get_time_usec) = interface.get_time_usec {
+                return unsafe { get_time_usec() };
+            }
+        }
+
+        0
+    }
+
+    pub fn perf_get_counter(&self) -> u64 {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.perf_interface.interface {
+            if let Some(get_perf_counter) = interface.get_perf_counter {
+                return unsafe { get_perf_counter() };
+            }
+        }
+
+        0
+    }
+
+    pub fn get_cpu_features(&self) -> CpuFeatures {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.perf_interface.interface {
+            if let Some(get_cpu_features) = interface.get_cpu_features {
+                return unsafe { CpuFeatures::from_bits_unchecked(get_cpu_features()) };
+            }
+        }
+
+        CpuFeatures::empty()
+    }
+
+    pub fn location_service_start(&self) {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.location_interface {
+            if let Some(start) = interface.start {
+                unsafe { start() };
+            }
+        }
+    }
+
+    pub fn location_service_stop(&self) {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.location_interface {
+            if let Some(stop) = interface.stop {
+                unsafe { stop() };
+            }
+        }
+    }
+
+    pub fn location_service_get_position(&self) -> Option<Position> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.location_interface {
+            if let Some(get_position) = interface.get_position {
+                let mut lat = 0f64;
+                let mut lon = 0f64;
+                let mut horiz_accuracy = 0f64;
+                let mut vert_accuracy = 0f64;
+
+                unsafe {
+                    if !get_position(
+                        &mut lat as *mut f64,
+                        &mut lon as *mut f64,
+                        &mut horiz_accuracy as *mut f64,
+                        &mut vert_accuracy as *mut f64,
+                    ) {
+                        return None;
+                    }
+                };
+
+                return Some(Position {
+                    lat,
+                    lon,
+                    horiz_accuracy,
+                    vert_accuracy,
+                });
+            }
+        }
+
+        None
+    }
+
+    pub fn location_service_set_interval(&self, interval_ms: u32, interval_distance: u32) {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.location_interface {
+            if let Some(set_interval) = interface.set_interval {
+                unsafe { set_interval(interval_ms, interval_distance) };
+            }
+        }
+    }
+
+    pub fn midi_input_enabled(&self) -> bool {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.midi_interface {
+            if let Some(input_enabled) = interface.input_enabled {
+                return unsafe { input_enabled() };
+            }
+        }
+
+        false
+    }
+
+    pub fn midi_output_enabled(&self) -> bool {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.midi_interface {
+            if let Some(output_enabled) = interface.output_enabled {
+                return unsafe { output_enabled() };
+            }
+        }
+
+        false
+    }
+
+    pub fn midi_read_next(&self) -> Option<u8> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.midi_interface {
+            if let Some(read) = interface.read {
+                let mut value = 0;
+                unsafe {
+                    if read(&mut value as *mut u8) {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn midi_write_byte(&self, value: u8, delta_time: u32) -> bool {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.midi_interface {
+            if let Some(write) = interface.write {
+                return unsafe { write(value, delta_time) };
+            }
+        }
+
+        false
+    }
+
+    pub fn midi_flush(&self) -> bool {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.midi_interface {
+            if let Some(flush) = interface.flush {
+                return unsafe { flush() };
+            }
+        }
+
+        false
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_get_path(&self, handle: &mut retro_vfs_file_handle) -> Option<CString> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(get_path) = interface.get_path {
+                let ptr = unsafe { get_path(handle) };
+                if !ptr.is_null() {
+                    let path = CStr::from_ptr(ptr).to_owned();
+                    return Some(path);
+                }
+            }
+        }
+
+        None
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_open(
+        &self,
+        path: &str,
+        mode: VfsFileOpenFlags,
+        hints: VfsFileOpenHints,
+    ) -> Result<retro_vfs_file_handle, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(open) = interface.open {
+                let path = CString::new(path)?;
+
+                let handle = unsafe { open(path.as_ptr(), mode.bits(), hints.bits()) };
+                if !handle.is_null() {
+                    return Ok(*handle);
+                }
+            }
+        }
+
+        Err("Failed to open file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_close(
+        &self,
+        mut handle: retro_vfs_file_handle,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(close) = interface.close {
+                if unsafe { close(&mut handle) } == 0 {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err("Failed to close file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_size(
+        &self,
+        handle: &mut retro_vfs_file_handle,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(size) = interface.size {
+                let size = unsafe { size(handle) };
+                if size >= 0 {
+                    return Ok(size as u64);
+                }
+            }
+        }
+
+        Err("Failed to get file size".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_truncate(
+        &self,
+        handle: &mut retro_vfs_file_handle,
+        length: i64, // no idea why the API wants signed values
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 2 {
+            return Err(format!(
+                "VFS interface version 2 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(truncate) = interface.truncate {
+                if unsafe { truncate(handle, length) } == 0 {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err("Failed to truncate file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_tell(
+        &self,
+        handle: &mut retro_vfs_file_handle,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(tell) = interface.tell {
+                let position = unsafe { tell(handle) };
+                if position >= 0 {
+                    return Ok(position as u64);
+                }
+            }
+        }
+
+        Err("Failed to get cursor position".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_seek(
+        &self,
+        handle: &mut retro_vfs_file_handle,
+        offset: i64,
+        seek_position: VfsSeekPosition,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(seek) = interface.seek {
+                let position = unsafe { seek(handle, offset, seek_position as i32) };
+                if position >= 0 {
+                    return Ok(position as u64);
+                }
+            }
+        }
+
+        Err("Failed to seek into file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_read(
+        &self,
+        handle: &mut retro_vfs_file_handle,
+        length: usize,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(read) = interface.read {
+                let mut buffer = Vec::with_capacity(length);
+
+                let read_length =
+                    unsafe { read(handle, buffer.as_mut_ptr() as *mut _, length as u64) };
+                if read_length >= 0 {
+                    return Ok(buffer);
+                }
+            }
+        }
+
+        Err("Failed to read from file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_write(
+        &self,
+        handle: &mut retro_vfs_file_handle,
+        buffer: &mut [u8],
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(write) = interface.write {
+                let bytes_written =
+                    unsafe { write(handle, buffer.as_mut_ptr() as *mut _, buffer.len() as u64) };
+                if bytes_written >= 0 {
+                    return Ok(bytes_written as u64);
+                }
+            }
+        }
+
+        Err("Failed to write to file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_flush(
+        &self,
+        handle: &mut retro_vfs_file_handle,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(flush) = interface.flush {
+                if unsafe { flush(handle) } == 0 {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err("Failed to flush file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_remove(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(remove) = interface.remove {
+                let path = CString::new(path)?;
+
+                if unsafe { remove(path.as_ptr()) } == 0 {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err("Failed to remove file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_rename(
+        &self,
+        old_path: &str,
+        new_path: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(rename) = interface.rename {
+                let old_path = CString::new(old_path)?;
+                let new_path = CString::new(new_path)?;
+
+                if unsafe { rename(old_path.as_ptr(), new_path.as_ptr()) } == 0 {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err("Failed to rename file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_stat(&self, path: &str) -> Result<(VfsStat, u64), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 3 {
+            return Err(format!(
+                "VFS interface version 3 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(stat) = interface.stat {
+                let path = CString::new(path)?;
+                let (stat, size) = unsafe {
+                    let mut size = 0i32;
+                    let value = stat(path.as_ptr(), &mut size);
+
+                    (VfsStat::from_bits_unchecked(value), size)
+                };
+
+                if stat.is_empty() {
+                    return Err(format!("Invalid stat bitmask: {stat:#?}").into());
+                } else if size < 0 {
+                    return Err(format!("Invalid file size: {size}").into());
+                }
+
+                return Ok((stat, size as u64));
+            }
+        }
+
+        Err("Failed to stat file".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_mkdir(&self, dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 3 {
+            return Err(format!(
+                "VFS interface version 3 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(mkdir) = interface.mkdir {
+                let dir = CString::new(dir)?;
+
+                match unsafe { mkdir(dir.as_ptr()) } {
+                    0 => return Ok(()),
+                    -2 => return Err("Failed to create directory: Exists already".into()),
+                    _ => (),
+                }
+            }
+        }
+
+        Err("Failed to create directory".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_opendir(
+        &self,
+        dir: &str,
+        include_hidden: bool,
+    ) -> Result<retro_vfs_dir_handle, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 3 {
+            return Err(format!(
+                "VFS interface version 3 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(opendir) = interface.opendir {
+                let dir = CString::new(dir)?;
+
+                let handle = unsafe { opendir(dir.as_ptr(), include_hidden) };
+                if !handle.is_null() {
+                    return Ok(*handle);
+                }
+            }
+        }
+
+        Err("Failed to open directory".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_readdir(
+        &self,
+        handle: &mut retro_vfs_dir_handle,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 3 {
+            return Err(format!(
+                "VFS interface version 3 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(readdir) = interface.readdir {
+                if unsafe { readdir(handle) } {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err("Failed to read directory".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_dirent_get_name(
+        &self,
+        handle: &mut retro_vfs_dir_handle,
+    ) -> Result<CString, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 3 {
+            return Err(format!(
+                "VFS interface version 3 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(dirent_get_name) = interface.dirent_get_name {
+                let ptr = unsafe { dirent_get_name(handle) };
+                if !ptr.is_null() {
+                    let name = CStr::from_ptr(ptr).to_owned();
+                    return Ok(name);
+                }
+            }
+        }
+
+        Err("Failed to get entry name".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_dirent_is_dir(
+        &self,
+        handle: &mut retro_vfs_dir_handle,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 3 {
+            return Err(format!(
+                "VFS interface version 3 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(dirent_is_dir) = interface.dirent_is_dir {
+                return Ok(unsafe { dirent_is_dir(handle) });
+            }
+        }
+
+        Err("Failed to check if the entry is a directory".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn vfs_closedir(
+        &self,
+        mut handle: retro_vfs_dir_handle,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if interfaces.vfs_interface_info.supported_version < 3 {
+            return Err(format!(
+                "VFS interface version 3 required, but the frontend only supports version {}",
+                interfaces.vfs_interface_info.supported_version
+            )
+            .into());
+        }
+
+        if let Some(interface) = interfaces.vfs_interface_info.interface {
+            if let Some(closedir) = interface.closedir {
+                if unsafe { closedir(&mut handle) } == 0 {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err("Failed to close directory".into())
+    }
 }
 
 /// Functions that are safe to be called in [`Core::on_reset`].
@@ -167,6 +881,40 @@ impl<'a> SetEnvironmentContext<'a> {
             get_proc_address: Some(retro_get_proc_address_callback),
         })
     }
+
+    pub fn enable_options_update_display_callback(&mut self) -> bool {
+        self.set_core_options_update_display_callback(retro_core_options_update_display_callback {
+            callback: Some(retro_core_options_update_display_callback_fn),
+        })
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn enable_vfs_interface(
+        &mut self,
+        min_version: u32,
+    ) -> Result<u32, Box<dyn std::error::Error>> {
+        let mut interfaces = self.interfaces.write().unwrap();
+
+        let info = self.get_vfs_interface(retro_vfs_interface_info {
+            required_interface_version: min_version,
+            iface: std::ptr::null_mut(),
+        });
+
+        if let Some(info) = info {
+            if !info.iface.is_null() && info.required_interface_version >= min_version {
+                interfaces.vfs_interface_info = VfsInterfaceInfo {
+                    supported_version: info.required_interface_version,
+                    interface: Some(*info.iface),
+                }
+            }
+        }
+
+        if interfaces.vfs_interface_info.interface.is_some() {
+            Ok(interfaces.vfs_interface_info.supported_version)
+        } else {
+            Err("Failed to enable VFS interface".into())
+        }
+    }
 }
 
 /// Functions that are safe to be called in [`Core::on_load_game`].
@@ -174,38 +922,17 @@ impl<'a> SetEnvironmentContext<'a> {
 /// For a description of the callbacks see [`CoreWrapper`].
 pub struct LoadGameContext<'a> {
     pub(crate) environment_callback: &'a retro_environment_t,
-
-    pub(crate) camera_interface: &'a mut Option<retro_camera_callback>,
-    pub(crate) perf_interface: &'a mut Option<retro_perf_callback>,
-    pub(crate) location_interface: &'a mut Option<retro_location_callback>,
-    pub(crate) rumble_interface: &'a mut Option<retro_rumble_interface>,
-
-    #[cfg(feature = "unstable-env-commands")]
-    pub(crate) sensor_interface: &'a mut Option<retro_sensor_interface>,
+    pub(crate) interfaces: Interfaces,
 }
 
 impl<'a> LoadGameContext<'a> {
-    pub fn new(
+    pub(crate) fn new(
         environment_callback: &'a retro_environment_t,
-        camera_interface: &'a mut Option<retro_camera_callback>,
-        perf_interface: &'a mut Option<retro_perf_callback>,
-        location_interface: &'a mut Option<retro_location_callback>,
-        rumble_interface: &'a mut Option<retro_rumble_interface>,
-
-        #[cfg(feature = "unstable-env-commands")] sensor_interface: &'a mut Option<
-            retro_sensor_interface,
-        >,
+        interfaces: Interfaces,
     ) -> Self {
         Self {
             environment_callback,
-
-            camera_interface,
-            perf_interface,
-            location_interface,
-            rumble_interface,
-
-            #[cfg(feature = "unstable-env-commands")]
-            sensor_interface,
+            interfaces,
         }
     }
 
@@ -226,7 +953,14 @@ impl<'a> LoadGameContext<'a> {
         width: u32,
         height: u32,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        *self.camera_interface = self.get_camera_interface(retro_camera_callback {
+        use retro_camera_buffer::*;
+
+        let enable_raw = caps & (1 << RETRO_CAMERA_BUFFER_RAW_FRAMEBUFFER as u64) > 0;
+        let enable_opengl = caps & (1 << RETRO_CAMERA_BUFFER_OPENGL_TEXTURE as u64) > 0;
+
+        let mut interfaces = self.interfaces.write().unwrap();
+
+        interfaces.camera_interface = self.get_camera_interface(retro_camera_callback {
             caps,
             width,
             height,
@@ -234,48 +968,74 @@ impl<'a> LoadGameContext<'a> {
             start: None,
             stop: None,
 
-            frame_raw_framebuffer: Some(retro_camera_frame_raw_framebuffer_callback),
-            frame_opengl_texture: Some(retro_camera_frame_opengl_texture_callback),
+            frame_raw_framebuffer: if enable_raw {
+                Some(retro_camera_frame_raw_framebuffer_callback)
+            } else {
+                None
+            },
+            frame_opengl_texture: if enable_opengl {
+                Some(retro_camera_frame_opengl_texture_callback)
+            } else {
+                None
+            },
             initialized: Some(retro_camera_initialized_callback),
             deinitialized: Some(retro_camera_deinitialized_callback),
         });
 
-        if self.camera_interface.is_some() {
+        if interfaces.camera_interface.is_some() {
             Ok(())
         } else {
             Err("Failed to enable camera interface".into())
         }
     }
 
-    #[cfg(feature = "unstable-env-commands")]
     #[proc::unstable(feature = "env-commands")]
     pub fn enable_sensor_interface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let ctx: GenericContext = self.into();
-        *self.sensor_interface = ctx.get_sensor_interface();
+        let mut interfaces = self.interfaces.write().unwrap();
+        interfaces.sensor_interface = ctx.get_sensor_interface();
 
-        if self.sensor_interface.is_some() {
+        if interfaces.sensor_interface.is_some() {
             Ok(())
         } else {
             Err("Failed to enable sensor interface".into())
         }
     }
 
-    pub fn enable_perf_interface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    #[proc::unstable(feature = "env-commands")]
+    pub fn enable_led_interface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let ctx: GenericContext = self.into();
-        *self.perf_interface = ctx.get_perf_interface();
+        let mut interfaces = self.interfaces.write().unwrap();
+        interfaces.led_interface = ctx.get_led_interface();
 
-        if self.perf_interface.is_some() {
+        if interfaces.led_interface.is_some() {
             Ok(())
         } else {
-            Err("Failed to enable performance interface".into())
+            Err("Failed to enable led interface".into())
+        }
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn enable_midi_interface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let ctx: GenericContext = self.into();
+        let mut interfaces = self.interfaces.write().unwrap();
+        interfaces.midi_interface = ctx.get_midi_interface();
+
+        if interfaces.midi_interface.is_some() {
+            Ok(())
+        } else {
+            Err("Failed to enable MIDI interface".into())
         }
     }
 
     pub fn enable_location_interface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let ctx: GenericContext = self.into();
-        *self.location_interface = ctx.get_location_callback();
+        let mut interfaces = self.interfaces.write().unwrap();
+        interfaces.location_interface = ctx.get_location_callback();
 
-        if self.location_interface.is_some() {
+        if let Some(mut interface) = interfaces.location_interface {
+            interface.initialized = Some(retro_location_lifetime_status_initialized_callback);
+            interface.deinitialized = Some(retro_location_lifetime_status_deinitialized_callback);
             Ok(())
         } else {
             Err("Failed to enable location interface".into())
@@ -283,13 +1043,59 @@ impl<'a> LoadGameContext<'a> {
     }
 
     pub fn enable_rumble_interface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        *self.rumble_interface = self.get_rumble_interface();
+        let mut interfaces = self.interfaces.write().unwrap();
+        interfaces.rumble_interface = self.get_rumble_interface();
 
-        if self.rumble_interface.is_some() {
+        if interfaces.rumble_interface.is_some() {
             Ok(())
         } else {
-            Err("Failed to rumble location interface".into())
+            Err("Failed to enable rumble interface".into())
         }
+    }
+
+    pub fn enable_perf_interface(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let ctx: GenericContext = self.into();
+        let mut interfaces = self.interfaces.write().unwrap();
+        interfaces.perf_interface = PerfCounters {
+            interface: ctx.get_perf_interface(),
+            counters: HashMap::new(),
+        };
+
+        if interfaces.perf_interface.interface.is_some() {
+            Ok(())
+        } else {
+            Err("Failed to enable perf interface".into())
+        }
+    }
+
+    pub unsafe fn enable_hw_render(
+        &mut self,
+        context_type: retro_hw_context_type,
+        bottom_left_origin: bool,
+        version_major: u32,
+        version_minor: u32,
+        debug_context: bool,
+    ) -> bool {
+        let data = retro_hw_render_callback {
+            context_type,
+            bottom_left_origin,
+            version_major,
+            version_minor,
+            cache_context: true,
+            debug_context,
+
+            depth: false,   // obsolete
+            stencil: false, // obsolete
+
+            context_reset: Some(retro_hw_context_reset_callback),
+            context_destroy: Some(retro_hw_context_destroyed_callback),
+
+            // Set by the frontend
+            get_current_framebuffer: None,
+            get_proc_address: None,
+        };
+
+        self.set_hw_render(data)
     }
 }
 into_generic!(LoadGameContext<'a>, 'a);
@@ -299,6 +1105,7 @@ into_generic!(LoadGameContext<'a>, 'a);
 /// For a description of the callbacks see [`CoreWrapper`].
 pub struct AudioContext<'a> {
     pub(crate) environment_callback: &'a retro_environment_t,
+    pub(crate) interfaces: Interfaces,
 
     pub(crate) audio_sample_batch_callback: &'a retro_audio_sample_batch_t,
     pub(crate) audio_sample_callback: &'a retro_audio_sample_t,
@@ -342,6 +1149,7 @@ into_generic!(AudioContext<'a>, 'a);
 /// For a description of the callbacks see [`CoreWrapper`].
 pub struct RunContext<'a> {
     pub(crate) environment_callback: &'a retro_environment_t,
+    pub(crate) interfaces: Interfaces,
 
     pub(crate) audio_sample_batch_callback: &'a retro_audio_sample_batch_t,
     pub(crate) audio_sample_callback: &'a retro_audio_sample_t,
@@ -364,6 +1172,8 @@ impl<'a> From<&mut RunContext<'a>> for AudioContext<'a> {
     fn from(other: &mut RunContext<'a>) -> AudioContext<'a> {
         AudioContext {
             environment_callback: other.environment_callback,
+            interfaces: Arc::clone(&other.interfaces),
+
             audio_sample_batch_callback: other.audio_sample_batch_callback,
             audio_sample_callback: other.audio_sample_callback,
         }
@@ -576,6 +1386,28 @@ impl<'a> RunContext<'_> {
                     height,
                     pitch,
                 )
+            }
+        }
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn camera_start(&self) {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.camera_interface {
+            if let Some(start) = interface.start {
+                unsafe { start() };
+            }
+        }
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn camera_stop(&self) {
+        let interfaces = self.interfaces.read().unwrap();
+
+        if let Some(interface) = interfaces.camera_interface {
+            if let Some(stop) = interface.stop {
+                unsafe { stop() };
             }
         }
     }

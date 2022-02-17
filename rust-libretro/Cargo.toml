@@ -30,4 +30,4 @@ doc_item = "0.2.5"
 log = { version = "0.4.14", features = [ "std" ], optional = true }
 
 [dev-dependencies]
-libc = "0.2.117"
+libc = "0.2.118"

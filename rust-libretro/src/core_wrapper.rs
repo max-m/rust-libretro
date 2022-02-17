@@ -2,6 +2,32 @@
 //!
 //! It stores runtime information provided by the libretro frontend without interfering with your [`Core`] implementation.
 use crate::*;
+use std::sync::{Arc, RwLock};
+
+pub type Interfaces = Arc<RwLock<InterfaceList>>;
+
+#[derive(Debug, Default)]
+#[proc::unstable]
+pub struct InterfaceList {
+    pub location_interface: Option<retro_location_callback>,
+    pub perf_interface: PerfCounters,
+    pub rumble_interface: Option<retro_rumble_interface>,
+
+    #[unstable(feature = "env-commands")]
+    pub camera_interface: Option<retro_camera_callback>,
+
+    #[unstable(feature = "env-commands")]
+    pub led_interface: Option<retro_led_interface>,
+
+    #[unstable(feature = "env-commands")]
+    pub sensor_interface: Option<retro_sensor_interface>,
+
+    #[unstable(feature = "env-commands")]
+    pub midi_interface: Option<retro_midi_interface>,
+
+    #[unstable(feature = "env-commands")]
+    pub vfs_interface_info: VfsInterfaceInfo,
+}
 
 /// Holds the core instance as well as runtime information from the libretro frontend.
 ///
@@ -45,15 +71,6 @@ pub(crate) struct CoreWrapper {
     /// will still use the higher level [`RETRO_DEVICE_JOYPAD`] to request input.
     pub(crate) input_state_callback: retro_input_state_t,
 
-    pub(crate) rumble_interface: Option<retro_rumble_interface>,
-
-    #[cfg(feature = "unstable-env-commands")]
-    pub(crate) sensor_interface: Option<retro_sensor_interface>,
-
-    pub(crate) camera_interface: Option<retro_camera_callback>,
-    pub(crate) perf_interface: Option<retro_perf_callback>,
-    pub(crate) location_interface: Option<retro_location_callback>,
-
     pub(crate) can_dupe: bool,
     pub(crate) had_frame: bool,
     pub(crate) last_width: u32,
@@ -63,6 +80,8 @@ pub(crate) struct CoreWrapper {
     pub(crate) supports_bitmasks: bool,
 
     pub(crate) frame_delta: Option<i64>,
+
+    pub(crate) interfaces: Interfaces,
 
     /// The wrapped [`Core`] implementation.
     pub(crate) core: Box<dyn Core>,
@@ -83,15 +102,7 @@ impl CoreWrapper {
             input_poll_callback: None,
             input_state_callback: None,
 
-            rumble_interface: None,
-
-            #[cfg(feature = "unstable-env-commands")]
-            sensor_interface: None,
-
-            camera_interface: None,
-
-            perf_interface: None,
-            location_interface: None,
+            interfaces: Arc::new(RwLock::new(InterfaceList::default())),
 
             can_dupe: false,
             had_frame: false,

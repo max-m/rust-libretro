@@ -5,15 +5,11 @@ use std::io::Write;
 
 pub struct RetroLogger {
     callback: retro_log_callback,
-    log_level: Level,
 }
 
 impl RetroLogger {
     pub fn new(callback: retro_log_callback) -> Self {
-        Self {
-            callback,
-            log_level: Level::Debug,
-        }
+        Self { callback }
     }
 
     fn get_retro_log_level(level: Level) -> retro_log_level {
@@ -29,7 +25,7 @@ impl RetroLogger {
 
 impl log::Log for RetroLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= self.log_level
+        metadata.level() <= log::max_level()
     }
 
     fn log(&self, record: &Record) {

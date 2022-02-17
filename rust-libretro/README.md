@@ -8,7 +8,6 @@ A Rust library providing abstractions over the [libretro API](../rust-libretro-s
 [![Documentation](https://docs.rs/rust-libretro/badge.svg)](https://docs.rs/rust-libretro)
 ![License](https://img.shields.io/crates/l/rust-libretro.svg)
 
-Most “non-core” API functions aren’t exposed to the core implementation yet,
-look for `NON CORE API FUNCTIONS` in [lib.rs](src/lib.rs).
-
+Many of the abstractions lack documentation right now.
 PRs are welcome!
+
