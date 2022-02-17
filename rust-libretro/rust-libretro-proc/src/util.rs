@@ -50,36 +50,25 @@ pub fn get_attrs_mut(item: &mut syn::Item) -> Option<&mut Vec<syn::Attribute>> {
     }
 }
 
-pub fn push_attr(item: &mut syn::Item, attr: syn::Attribute) {
-    if let Some(attrs) = get_attrs_mut(item) {
-        attrs.push(attr);
+pub fn prepend_doc(attrs: &mut Vec<syn::Attribute>, doc: &str) {
+    let mut had_doc = false;
+
+    for (index, attribute) in attrs.iter_mut().enumerate() {
+        if attribute.path.is_ident("doc") {
+            let doc = syn::parse_quote! {
+                #[doc = #doc]
+            };
+
+            *attrs = [&attrs[0..index], &[doc], &attrs[index..]].concat();
+            had_doc = true;
+
+            break;
+        }
     }
-}
 
-pub fn prepend_doc(item: &mut syn::Item, doc: &str) {
-    if let Some(attrs) = get_attrs_mut(item) {
-        let mut had_doc = false;
-
-        for (index, attribute) in attrs.iter_mut().enumerate() {
-            if attribute.path.is_ident("doc") {
-                let doc = syn::parse_quote! {
-                    #[doc = #doc]
-                };
-
-                *attrs = [&attrs[0..index], &[doc], &attrs[index..]].concat();
-                had_doc = true;
-
-                break;
-            }
-        }
-
-        if !had_doc {
-            push_attr(
-                item,
-                syn::parse_quote! {
-                    #[doc = #doc]
-                },
-            );
-        }
+    if !had_doc {
+        attrs.push(syn::parse_quote! {
+            #[doc = #doc]
+        });
     }
 }

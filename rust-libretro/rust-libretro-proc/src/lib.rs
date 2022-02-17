@@ -11,7 +11,7 @@ use syn::{
     parse::{discouraged::Speculative, Parse, ParseStream, Result},
     parse2, parse_macro_input, parse_quote,
     punctuated::Punctuated,
-    DeriveInput, LitByteStr, LitStr, Token,
+    Attribute, DeriveInput, LitByteStr, LitStr, NestedMeta, Token,
 };
 
 mod util;
@@ -649,27 +649,120 @@ fn impl_derive_core_options(input: DeriveInput) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Marks a function as unstable and guards it behind a feature flag.
-///
-/// Feature names are accepted as either `#[unstable(feature_name)]` or `#[unstable(feature = "name")]`.
-///
-/// If no name was given `unstable` is assumed.
+const UNSTABLE_TAG: &str = "<span class='stab unstable'>Unstable</span>";
+
+fn get_unstable_text(feature_name: &str) -> String {
+    format!(
+        "# This feature is unstable and guarded by the `{}` feature flag.\
+        \n\
+        Please be advised that this feature might change without further notice \
+        and no guarantees about its stability can be made.",
+        feature_name
+    )
+}
+
+fn add_unstable_text(attrs: &mut Vec<Attribute>, feature_name: &str) {
+    prepend_doc(attrs, UNSTABLE_TAG);
+
+    let unstable_doc = get_unstable_text(feature_name);
+
+    attrs.push(syn::parse_quote! {
+        #[doc = #unstable_doc]
+    });
+}
+
+/// Marks a function or struct (item) as unstable and guards it behind a feature flag.
 ///
 /// The defining crate is allowed to use functions marked as unstable even when the feature is disabled.
+///
+/// # Examples
+///
+/// ```rust
+/// #[rust_libretro_proc::unstable(feature = "name")]
+/// fn my_example_function() { }
+/// ```
+///
+/// ```rust
+/// // We must add an empty `rust_libretro_proc::unstable` attribute to the struct,
+/// // in order to process the struct items.
+/// #[rust_libretro_proc::unstable]
+/// struct Example {
+///     pub stable_struct_item: bool,
+///
+///     #[unstable(feature = "name")]
+///     pub unstable_struct_item: bool,
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn unstable(args: TokenStream, input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as syn::AttributeArgs);
-    let mut item = parse_macro_input!(input as syn::Item);
+    use syn::{AttributeArgs, Item, Lit, Meta, MetaList, Visibility};
+
+    let args = parse_macro_input!(args as AttributeArgs);
+    let mut item = parse_macro_input!(input as Item);
+
+    // Handle unstable struct items
+    if let Item::Struct(ref mut item) = item {
+        if args.is_empty() {
+            if let syn::Fields::Named(fields) = &mut item.fields {
+                let len = fields.named.len();
+
+                for index in 0..len {
+                    let field = &mut fields.named[index];
+                    let metas = field
+                        .attrs
+                        .iter()
+                        .filter(|attr| attr.path.is_ident("unstable"))
+                        .filter_map(|attr| attr.parse_meta().ok())
+                        .collect::<Vec<_>>();
+
+                    field.attrs.retain(|attr| !attr.path.is_ident("unstable"));
+
+                    if matches!(field.vis, Visibility::Public(_)) && !metas.is_empty() {
+                        let mut private_item = field.clone();
+                        private_item.vis = parse_quote!(pub(crate));
+
+                        for meta in &metas {
+                            let mut feature_name = "unstable".to_owned();
+
+                            if let Meta::List(MetaList { nested, .. }) = meta {
+                                if let NestedMeta::Meta(Meta::NameValue(ref named_value)) =
+                                    nested[0]
+                                {
+                                    if let Lit::Str(custom_name) = &named_value.lit {
+                                        feature_name = format!("unstable-{}", custom_name.value());
+                                    }
+                                }
+                            }
+
+                            add_unstable_text(&mut field.attrs, &feature_name);
+                            field.attrs.push(syn::parse_quote! {
+                                #[cfg(feature = #feature_name)]
+                            });
+
+                            add_unstable_text(&mut private_item.attrs, &feature_name);
+                            private_item.attrs.push(syn::parse_quote! {
+                                #[cfg(not(feature = #feature_name))]
+                            });
+                        }
+
+                        fields.named.push(private_item);
+                    }
+                }
+            }
+
+            return item.into_token_stream().into();
+        }
+    }
 
     let feature_name = {
         let mut name = "unstable".to_owned();
 
         for arg in args.iter() {
-            if let syn::NestedMeta::Lit(syn::Lit::Str(custom_name)) = arg {
+            if let NestedMeta::Lit(Lit::Str(custom_name)) = arg {
                 name = format!("unstable-{}", custom_name.value());
                 break;
-            } else if let syn::NestedMeta::Meta(syn::Meta::NameValue(named_value)) = arg {
-                if let syn::Lit::Str(custom_name) = &named_value.lit {
+            } else if let NestedMeta::Meta(Meta::NameValue(named_value)) = arg {
+                if let Lit::Str(custom_name) = &named_value.lit {
                     name = format!("unstable-{}", custom_name.value());
                     break;
                 }
@@ -679,32 +772,19 @@ pub fn unstable(args: TokenStream, input: TokenStream) -> TokenStream {
         name
     };
 
-    if let syn::Item::Fn(ref mut item) = item {
+    if let Item::Fn(ref mut item) = item {
         // Mark the function as unsafe
-        item.sig.unsafety = Some(syn::parse_quote!(unsafe));
+        item.sig.unsafety = Some(parse_quote!(unsafe));
     }
 
     if is_public(&item) {
-        prepend_doc(&mut item, "<span class='stab unstable'>Unstable</span>");
-
-        let unstable_doc = format!(
-            "# This feature is unstable and guarded by the `{}` feature flag.\
-            \n\
-            Please be advised that this feature might change without further notice \
-            and no guarantees about its stability can be made.",
-            feature_name
-        );
-
-        push_attr(
-            &mut item,
-            syn::parse_quote! {
-                #[doc = #unstable_doc]
-            },
-        );
+        if let Some(attrs) = get_attrs_mut(&mut item) {
+            add_unstable_text(attrs, &feature_name);
+        }
 
         let mut private_item = item.clone();
         if let Some(vis) = get_visibility_mut(&mut private_item) {
-            *vis = syn::parse_quote!(pub(crate));
+            *vis = parse_quote!(pub(crate));
         }
 
         return TokenStream::from(quote! {
