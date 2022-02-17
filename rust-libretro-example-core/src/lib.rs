@@ -146,17 +146,8 @@ impl Core for ExampleCore {
         ctx.set_performance_level(0);
         ctx.enable_frame_time_callback((1000000.0f64 / 60.0).round() as retro_usec_t);
 
-        // unsafe { let _ = ctx.enable_camera_interface(retro_camera_buffer::RETRO_CAMERA_BUFFER_RAW_FRAMEBUFFER as u64, 320, 200); }
-        // unsafe { let _ = ctx.enable_sensor_interface(); }
-        // let _ = ctx.enable_perf_interface();
-        // let _ = ctx.enable_location_interface();
-        // let _ = ctx.enable_rumble_interface();
-
         let gctx: GenericContext = ctx.into();
-        // gctx.enable_keyboard_callback();
         gctx.enable_audio_callback();
-        // gctx.enable_disk_control_interface();
-        // gctx.enable_audio_buffer_status_callback();
 
         true
     }
@@ -178,13 +169,10 @@ impl Core for ExampleCore {
     #[inline]
     fn on_run(&mut self, ctx: &mut RunContext, delta_us: Option<i64>) {
         let gctx: GenericContext = ctx.into();
-        // let actx: AudioContext = ctx.into();
 
         self.timer += delta_us.unwrap_or(16_666);
 
         let input = unsafe { ctx.get_joypad_bitmask(0, 0) };
-
-        // println!("Input: {:#?}", &input);
 
         if input.contains(JoypadState::START) && input.contains(JoypadState::SELECT) {
             return gctx.shutdown();
@@ -216,23 +204,6 @@ impl Core for ExampleCore {
         } else if ctx.can_dupe() {
             ctx.dupe_frame();
         }
-    }
-
-    fn on_keyboard_event(
-        &mut self,
-        down: bool,
-        keycode: retro_key,
-        character: u32,
-        key_modifiers: retro_mod,
-    ) {
-        log::info!(
-            "KEYBOARD: {}, {:?}, {}, {:?}",
-            down,
-            keycode,
-            character,
-            key_modifiers
-        );
-        log::info!("Is RETROK_C: {}", keycode == retro_key::RETROK_c);
     }
 
     fn on_write_audio(&mut self, ctx: &mut AudioContext) {
