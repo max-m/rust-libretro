@@ -13,7 +13,7 @@ homepage = "https://github.com/max-m/rust-libretro/"
 repository = "https://github.com/max-m/rust-libretro/"
 
 [dependencies]
-libc = "0.2.117"
+libc = "0.2.118"
 
 [build-dependencies]
 bindgen = "0.59.2"

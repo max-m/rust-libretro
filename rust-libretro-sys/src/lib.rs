@@ -26,6 +26,9 @@ pub const RETRO_DEVICE_ID_LIGHTGUN_TURBO: u32 = 4;
 #[deprecated = "Use `RETRO_DEVICE_ID_LIGHTGUN_START` instead."]
 pub const RETRO_DEVICE_ID_LIGHTGUN_PAUSE: u32 = 5;
 
+/// Pass this to [`retro_video_refresh_t`] if rendering to hardware.
+/// Passing NULL to [`retro_video_refresh_t`] is still a frame dupe as normal.
+///
 /// For some reason bindgen did not export this #define
 pub const RETRO_HW_FRAME_BUFFER_VALID: *mut std::os::raw::c_void =
     -1_i32 as *mut std::os::raw::c_void;
