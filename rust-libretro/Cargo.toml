@@ -31,3 +31,13 @@ log = { version = "0.4.14", features = [ "std" ], optional = true }
 
 [dev-dependencies]
 libc = "0.2.118"
+# used by the example cores
+log = { version = "0.4.14", features = ["max_level_debug", "release_max_level_debug"] }
+image = "0.24.0"
+bytemuck = "1.7.3"
+
+[[example]]
+name = "input"
+path = "examples/input/lib.rs"
+crate-type = ["cdylib"]
+required-features = ["unstable-env-commands", "log"]

@@ -1341,6 +1341,10 @@ impl<'a> RunContext<'_> {
 
         if let Some(fb) = fb {
             if !fb.data.is_null() {
+                // TODO: Can we get rid of the raw pointer and PhantomData in an ergonomic way?
+                // When defining `data` as `&'a mut [u8]` it has the same lifetime as `self`,
+                // which means we borrow `self` for as long as this `FrameBuffer` exists.
+                // Thus we cannot pass the `FrameBuffer` to `Self::draw_frame` for example.
                 return Ok(Framebuffer {
                     data: fb.data as *mut u8,
                     phantom: ::core::marker::PhantomData,

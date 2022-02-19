@@ -399,6 +399,7 @@ pub mod unstable {
         }
     }
 
+    // TODO: Can we get rid of the raw pointer and PhantomData in an ergonomic way?
     pub struct Framebuffer<'a> {
         pub data: *mut u8,
         pub phantom: PhantomData<&'a mut [u8]>,
