@@ -817,9 +817,15 @@ pub unsafe fn get_language(callback: retro_environment_t) -> Option<retro_langua
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn get_current_software_framebuffer(
     callback: retro_environment_t,
+    data: retro_framebuffer,
 ) -> Option<retro_framebuffer> {
     // struct retro_framebuffer *
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER).map(|(v, _)| v)
+    get_mut(
+        callback,
+        RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER,
+        data,
+    )
+    .map(|(v, _)| v)
 }
 
 /// Returns an API specific rendering interface for accessing API specific data.

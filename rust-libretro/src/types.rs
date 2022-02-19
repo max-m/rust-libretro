@@ -278,6 +278,9 @@ pub struct Position {
 /// Data structures used by experimental libretro environment function calls
 #[proc::unstable(feature = "env-commands")]
 pub mod unstable {
+    use core::marker::PhantomData;
+    use rust_libretro_sys::*;
+
     bitflags::bitflags! {
         /// Tells the core if the frontend wants audio or video.
         pub struct AudioVideoEnable: u32 {
@@ -348,38 +351,64 @@ pub mod unstable {
     #[derive(Debug, Default)]
     pub struct VfsInterfaceInfo {
         pub(crate) supported_version: u32,
-        pub(crate) interface: Option<rust_libretro_sys::retro_vfs_interface>,
+        pub(crate) interface: Option<retro_vfs_interface>,
     }
 
     bitflags::bitflags! {
         pub struct VfsFileOpenFlags: u32 {
-            const READ = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_READ;
-            const WRITE = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_WRITE;
-            const READ_WRITE = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_READ_WRITE;
-            const UPDATE_EXISTING = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
+            const READ = RETRO_VFS_FILE_ACCESS_READ;
+            const WRITE = RETRO_VFS_FILE_ACCESS_WRITE;
+            const READ_WRITE = RETRO_VFS_FILE_ACCESS_READ_WRITE;
+            const UPDATE_EXISTING = RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
         }
     }
 
     bitflags::bitflags! {
         pub struct VfsFileOpenHints: u32 {
-            const NONE = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_HINT_NONE;
-            const FREQUENT_ACCESS = rust_libretro_sys::RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS;
+            const NONE = RETRO_VFS_FILE_ACCESS_HINT_NONE;
+            const FREQUENT_ACCESS = RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS;
         }
     }
 
     #[repr(i32)]
     pub enum VfsSeekPosition {
-        Start = rust_libretro_sys::RETRO_VFS_SEEK_POSITION_START as i32,
-        Current = rust_libretro_sys::RETRO_VFS_SEEK_POSITION_CURRENT as i32,
-        End = rust_libretro_sys::RETRO_VFS_SEEK_POSITION_END as i32,
+        Start = RETRO_VFS_SEEK_POSITION_START as i32,
+        Current = RETRO_VFS_SEEK_POSITION_CURRENT as i32,
+        End = RETRO_VFS_SEEK_POSITION_END as i32,
     }
 
     bitflags::bitflags! {
         pub struct VfsStat: i32 {
-            const STAT_IS_VALID = rust_libretro_sys::RETRO_VFS_STAT_IS_VALID as i32;
-            const STAT_IS_DIRECTORY = rust_libretro_sys::RETRO_VFS_STAT_IS_DIRECTORY as i32;
-            const STAT_IS_CHARACTER_SPECIAL = rust_libretro_sys::RETRO_VFS_STAT_IS_CHARACTER_SPECIAL as i32;
+            const STAT_IS_VALID = RETRO_VFS_STAT_IS_VALID as i32;
+            const STAT_IS_DIRECTORY = RETRO_VFS_STAT_IS_DIRECTORY as i32;
+            const STAT_IS_CHARACTER_SPECIAL = RETRO_VFS_STAT_IS_CHARACTER_SPECIAL as i32;
         }
+    }
+
+    bitflags::bitflags! {
+        pub struct MemoryAccess: u32 {
+            const WRITE = RETRO_MEMORY_ACCESS_WRITE;
+            const READ = RETRO_MEMORY_ACCESS_READ;
+        }
+    }
+
+    bitflags::bitflags! {
+        pub struct MemoryType: u32 {
+            const UNCACHED = 0;
+            const CACHED = RETRO_MEMORY_TYPE_CACHED;
+        }
+    }
+
+    pub struct Framebuffer<'a> {
+        pub data: *mut u8,
+        pub phantom: PhantomData<&'a mut [u8]>,
+
+        pub width: u32,
+        pub height: u32,
+        pub pitch: usize,
+        pub format: retro_pixel_format,
+        pub access_flags: MemoryAccess,
+        pub memory_flags: MemoryType,
     }
 }
 pub use unstable::*;

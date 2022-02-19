@@ -1320,6 +1320,44 @@ impl<'a> RunContext<'_> {
         JoypadState::empty()
     }
 
+    #[proc::unstable(feature = "env-commands")]
+    pub fn get_current_framebuffer(
+        &self,
+        width: u32,
+        height: u32,
+        access_flags: MemoryAccess,
+    ) -> Result<Framebuffer, Box<dyn std::error::Error>> {
+        let ctx: GenericContext = self.into();
+
+        let fb = ctx.get_current_software_framebuffer(retro_framebuffer {
+            data: std::ptr::null_mut(),
+            width,
+            height,
+            pitch: 0,
+            format: retro_pixel_format::RETRO_PIXEL_FORMAT_0RGB1555,
+            access_flags: access_flags.bits(),
+            memory_flags: 0,
+        });
+
+        if let Some(fb) = fb {
+            if !fb.data.is_null() {
+                return Ok(Framebuffer {
+                    data: fb.data as *mut u8,
+                    phantom: ::core::marker::PhantomData,
+
+                    width: fb.width,
+                    height: fb.height,
+                    pitch: fb.pitch as usize,
+                    format: fb.format,
+                    access_flags: MemoryAccess::from_bits_unchecked(fb.access_flags),
+                    memory_flags: MemoryType::from_bits_unchecked(fb.memory_flags),
+                });
+            }
+        }
+
+        Err("Failed to get current software framebuffer".into())
+    }
+
     /// Draws a new frame if [`RunContext::video_refresh_callback`] has been set
     pub fn draw_frame(&mut self, data: &[u8], width: u32, height: u32, pitch: u64) {
         if let Some(callback) = self.video_refresh_callback {
@@ -1354,19 +1392,19 @@ impl<'a> RunContext<'_> {
         }
     }
 
-    pub fn draw_framebuffer(&mut self, framebuffer: retro_framebuffer, pitch: u64) {
+    pub fn draw_framebuffer(&mut self, framebuffer: retro_framebuffer) {
         if let Some(callback) = self.video_refresh_callback {
             *self.had_frame = true;
             *self.last_width = framebuffer.width;
             *self.last_height = framebuffer.height;
-            *self.last_pitch = pitch;
+            *self.last_pitch = framebuffer.pitch;
 
             unsafe {
                 (callback)(
                     framebuffer.data,
                     framebuffer.width,
                     framebuffer.height,
-                    pitch,
+                    framebuffer.pitch,
                 )
             }
         }
