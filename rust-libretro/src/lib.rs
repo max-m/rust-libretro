@@ -625,7 +625,20 @@ pub unsafe extern "C" fn retro_load_game(game: *const retro_game_info) -> bool {
             wrapper.core.on_load_game(Some(*game), &mut ctx)
         };
 
-        return status;
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "log")] {
+                match status {
+                    Ok(()) => return true,
+                    Err(err) => {
+                        log::error!("Failed to load game: {:?}", err);
+                        return false;
+                    }
+                }
+            }
+            else {
+                return status.is_ok();
+            }
+        }
     }
 
     panic!("retro_load_game: Core has not been initialized yet!");
@@ -667,7 +680,20 @@ pub unsafe extern "C" fn retro_load_game_special(
             .core
             .on_load_game_special(game_type, info, num_info, &mut ctx);
 
-        return status;
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "log")] {
+                match status {
+                    Ok(()) => return true,
+                    Err(err) => {
+                        log::error!("Failed to load special game: {:?}", err);
+                        return false;
+                    }
+                }
+            }
+            else {
+                return status.is_ok();
+            }
+        }
     }
 
     panic!("retro_load_game_special: Core has not been initialized yet!");

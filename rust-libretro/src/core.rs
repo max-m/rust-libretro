@@ -33,7 +33,9 @@ pub trait Core: CoreOptions {
     }
 
     /// Called when the libretro API has been initialized.
-    fn on_init(&mut self, _ctx: &mut InitContext);
+    fn on_init(&mut self, _ctx: &mut InitContext) {
+        // Do nothing
+    }
 
     /// Called when the libretro API gets destucted.
     fn on_deinit(&mut self, _ctx: &mut DeinitContext) {
@@ -92,9 +94,13 @@ pub trait Core: CoreOptions {
 
     /// Called when a game should be loaded.
     /// Return [`true`] to indicate successful loading and [`false`] to indicate load failure.
-    fn on_load_game(&mut self, _game: Option<retro_game_info>, _ctx: &mut LoadGameContext) -> bool {
+    fn on_load_game(
+        &mut self,
+        _game: Option<retro_game_info>,
+        _ctx: &mut LoadGameContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // By default we pretend that loading was successful
-        true
+        Ok(())
     }
 
     /// Loads a "special" kind of game. Should not be used, except in extreme cases.
@@ -106,8 +112,8 @@ pub trait Core: CoreOptions {
         _info: *const retro_game_info,
         _num_info: size_t,
         _ctx: &mut LoadGameSpecialContext,
-    ) -> bool {
-        false
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        Err("on_load_game_special is not implemented".into())
     }
 
     /// Called when the currently loaded game should be unloaded.

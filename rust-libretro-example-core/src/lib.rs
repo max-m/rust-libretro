@@ -141,7 +141,11 @@ impl Core for ExampleCore {
         }
     }
 
-    fn on_load_game(&mut self, _info: Option<retro_game_info>, ctx: &mut LoadGameContext) -> bool {
+    fn on_load_game(
+        &mut self,
+        _info: Option<retro_game_info>,
+        ctx: &mut LoadGameContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         ctx.set_pixel_format(retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888);
         ctx.set_performance_level(0);
         ctx.enable_frame_time_callback((1000000.0f64 / 60.0).round() as retro_usec_t);
@@ -149,7 +153,7 @@ impl Core for ExampleCore {
         let gctx: GenericContext = ctx.into();
         gctx.enable_audio_callback();
 
-        true
+        Ok(())
     }
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
