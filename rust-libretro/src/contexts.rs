@@ -1196,9 +1196,9 @@ impl<'a> RunContext<'_> {
     }
 
     /// Gets the input state for the given player and device if [`RunContext::input_state_callback`] has been set
-    pub fn get_input_state(&self, port: u32, device: u32, index: u32, id: u32) -> u16 {
+    pub fn get_input_state(&self, port: u32, device: u32, index: u32, id: u32) -> i16 {
         if let Some(callback) = self.input_state_callback {
-            unsafe { (callback)(port, device, index, id) as u16 }
+            unsafe { (callback)(port, device, index, id) }
         } else {
             0
         }
