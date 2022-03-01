@@ -1,0 +1,130 @@
+name: Perform Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  docs:
+    name: Release docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          default: true
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo doc --all-features --document-private-items
+      - name: Add docs to archive
+        working-directory: target/doc
+        run: |
+          tar cvf ../../rust-libretro-docs.tar .
+          gzip ../../rust-libretro-docs.tar
+
+      - name: Release Docs
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          name: rust-libretro ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref, 'rc') }}
+          files: rust-libretro-docs.tar.gz
+
+  binaries:
+    name: Build release binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [stable, beta, nightly, macos, win64] # win32
+        include:
+          - build: stable
+            os: ubuntu-latest
+            rust: stable
+            prefix: lib
+            name: linux-amd64
+            ext: so
+          - build: beta
+            os: ubuntu-latest
+            rust: beta
+            prefix: lib
+            name: linux-amd64_rust-beta
+            ext: so
+          - build: nightly
+            os: ubuntu-latest
+            rust: nightly
+            prefix: lib
+            name: linux-amd64_rust-nightly
+            ext: so
+          - build: macos
+            os: macos-latest
+            rust: stable
+            prefix: lib
+            name: macos-amd64
+            ext: dylib
+          # - build: win32
+          #   os: windows-latest
+          #   rust: stable-i686
+          #   name: windows-32bit
+          #   ext: dll
+          - build: win64
+            os: windows-latest
+            rust: stable-x86_64
+            name: windows-amd64
+            ext: dll
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          default: true
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Set up Unix environment
+        run: |
+          echo "RUSTFLAGS=-Cstrip=symbols" >> $GITHUB_ENV
+          echo "RELEASE_FILE=rust-libretro-${{ matrix.name }}-${{ github.ref_name }}.tar" >> $GITHUB_ENV
+        if: matrix.os != 'windows-latest'
+
+      - name: Set up Windows environment
+        run: |
+          echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+          echo "RUSTFLAGS=-Cstrip=symbols" >> $env:GITHUB_ENV
+          echo "RELEASE_FILE=rust-libretro-${{ matrix.name }}-${{ github.ref_name }}.tar" >> $env:GITHUB_ENV
+        if: matrix.os == 'windows-latest'
+
+      - name: Compile
+        run: |
+            cargo build --release -p rust-libretro --examples --features="unstable-env-commands log"
+            cargo build --release -p rust-libretro-example-core
+
+      - name: Remove library prefixes
+        working-directory: target/release/
+        run: |
+          shopt -s nullglob
+          for file in ${{ matrix.prefix }}*.${{ matrix.ext }} examples/${{ matrix.prefix }}*.${{ matrix.ext }};
+          do dir=$(dirname $file)
+            name=$(basename $file)
+            mv "$file" "${dir}/${name#${{ matrix.prefix }}}"
+          done;
+        if: matrix.prefix != '' && matrix.os != 'windows-latest'
+
+      - name: Add compiled files to archive
+        working-directory: target/release/
+        run: tar -cvf ../../${{ env.RELEASE_FILE }} --exclude='examples/*-????????????????.${{ matrix.ext }}' *.${{ matrix.ext }} examples/*.${{ matrix.ext }}
+
+      - name: Compress ${{ env.RELEASE_FILE }}
+        run: gzip ${{ env.RELEASE_FILE }}
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          name: rust-libretro ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref, 'rc') }}
+          files: ${{ env.RELEASE_FILE }}.gz

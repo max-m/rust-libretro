@@ -2,8 +2,60 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  test:
-    name: Test
+  rustfmt:
+    name: Check rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        components: rustfmt
+        toolchain: stable
+        default: true
+    - run: cargo fmt -- --check
+
+  clippy:
+    name: Run Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: clippy
+          toolchain: stable
+          default: true
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features
+
+  docs:
+    name: Generate docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          default: true
+      - uses: Swatinem/rust-cache@v1
+      - run: cargo doc --all-features --document-private-items
+      - name: Add docs to archive
+        working-directory: target/doc
+        run: |
+          tar cvf ../../rust-libretro-docs.tar .
+          gzip ../../rust-libretro-docs.tar
+      - uses: actions/upload-artifact@v2
+        with:
+          name: rust-libretro-docs
+          path: rust-libretro-docs.tar.gz
+          if-no-files-found: error
+
+  test_and_build:
+    name: Test and build
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -13,49 +65,84 @@ jobs:
           - build: stable
             os: ubuntu-latest
             rust: stable
+            prefix: lib
+            name: linux-amd64
+            ext: so
           - build: beta
             os: ubuntu-latest
             rust: beta
+            prefix: lib
+            name: linux-amd64_rust-beta
+            ext: so
           - build: nightly
             os: ubuntu-latest
             rust: nightly
+            prefix: lib
+            name: linux-amd64_rust-nightly
+            ext: so
           - build: macos
             os: macos-latest
             rust: stable
+            prefix: lib
+            name: macos-amd64
+            ext: dylib
           # - build: win32
           #   os: windows-latest
           #   rust: stable-i686
+          #   name: windows-32bit
+          #   ext: dll
           - build: win64
             os: windows-latest
             rust: stable-x86_64
+            name: windows-amd64
+            ext: dll
     steps:
-    - uses: actions/checkout@master
-    - name: Install Rust (rustup)
-      run: |
-        rustup update ${{ matrix.rust }} --no-self-update
-        rustup default ${{ matrix.rust }}
-    - name: Set LIBCLANG_PATH
-      run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
-      if: matrix.os == 'windows-latest'
-    - name: MSVC linker args
-      # the MSVC linker will scream at us otherwise when trying to build the tests for `rust-libretro`,
-      # because in that case `__retro_init_core` will not have been exported by a core implementation.
-      run: |
-        echo "RUSTFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
-        echo "RUSTDOCFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
-      if: matrix.os == 'windows-latest'
-    - run: cargo test --workspace --verbose
-    - run: cargo test --workspace --verbose --no-default-features
-    - run: cargo test --workspace --verbose --all-features
+      - uses: actions/checkout@master
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          default: true
+      - uses: Swatinem/rust-cache@v1
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+        if: matrix.os == 'windows-latest'
+      - name: MSVC linker args
+        # the MSVC linker will scream at us otherwise when trying to build the tests for `rust-libretro`,
+        # because in that case `__retro_init_core` will not have been exported by a core implementation.
+        run: |
+          echo "RUSTFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
+          echo "RUSTDOCFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
+        if: matrix.os == 'windows-latest'
 
-  rustfmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@master
-    - name: Install Rust
-      run: |
-        rustup update stable --no-self-update
-        rustup default stable
-        rustup component add rustfmt
-    - run: cargo fmt -- --check
+      - run: cargo test --workspace --verbose
+      - run: cargo test --workspace --verbose --no-default-features
+      - run: cargo test --workspace --verbose --all-features
+
+      - run: cargo build -p rust-libretro --examples --features="unstable-env-commands log"
+      - run: cargo build -p rust-libretro-example-core
+
+      - name: Remove library prefixes
+        working-directory: target/debug/
+        run: |
+          shopt -s nullglob
+          for file in ${{ matrix.prefix }}*.${{ matrix.ext }} examples/${{ matrix.prefix }}*.${{ matrix.ext }};
+          do dir=$(dirname $file)
+            name=$(basename $file)
+            mv "$file" "${dir}/${name#${{ matrix.prefix }}}"
+          done;
+        if: matrix.prefix != '' && matrix.os != 'windows-latest'
+
+      - name: Compress Artifacts
+        working-directory: target/debug
+        shell: bash
+        run: |
+          shopt -s nullglob
+          tar cvf ../../rust-libretro-${{ matrix.name }}.tar --exclude='examples/*-????????????????.${{ matrix.ext }}' *.${{ matrix.ext }} examples/*.${{ matrix.ext }}
+          gzip ../../rust-libretro-${{ matrix.name }}.tar
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: rust-libretro-${{ matrix.name }}
+          path: rust-libretro-${{ matrix.name }}.tar.gz
+          if-no-files-found: error
