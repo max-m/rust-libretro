@@ -141,14 +141,19 @@ impl Core for InputTestCore {
         // try to get a software framebuffer from the frontend
         let fb = unsafe { ctx.get_current_framebuffer(WIDTH, HEIGHT, MemoryAccess::WRITE) };
         let mut fb = match fb {
-            Ok(fb) if fb.format == retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888 => FrameBuf {
-                data: fb.data,
-                phantom: PhantomData,
+            Ok(fb)
+                if fb.format == retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888
+                    && !fb.data.is_null() =>
+            {
+                FrameBuf {
+                    data: fb.data,
+                    phantom: PhantomData,
 
-                width: fb.width,
-                height: fb.height,
-                pitch: fb.pitch as u64,
-            },
+                    width: fb.width,
+                    height: fb.height,
+                    pitch: fb.pitch as u64,
+                }
+            }
             // use our own fallback buffer instead
             _ => FrameBuf {
                 data: self.framebuffer.as_mut_ptr(),
@@ -168,28 +173,28 @@ impl Core for InputTestCore {
             RETRO_DEVICE_INDEX_ANALOG_LEFT,
             RETRO_DEVICE_ID_ANALOG_X,
         ) as f32
-            / 32768.0;
+            / 32767.0;
         let ly = ctx.get_input_state(
             0,
             RETRO_DEVICE_ANALOG,
             RETRO_DEVICE_INDEX_ANALOG_LEFT,
             RETRO_DEVICE_ID_ANALOG_Y,
         ) as f32
-            / 32768.0;
+            / 32767.0;
         let rx = ctx.get_input_state(
             0,
             RETRO_DEVICE_ANALOG,
             RETRO_DEVICE_INDEX_ANALOG_RIGHT,
             RETRO_DEVICE_ID_ANALOG_X,
         ) as f32
-            / 32768.0;
+            / 32767.0;
         let ry = ctx.get_input_state(
             0,
             RETRO_DEVICE_ANALOG,
             RETRO_DEVICE_INDEX_ANALOG_RIGHT,
             RETRO_DEVICE_ID_ANALOG_Y,
         ) as f32
-            / 32768.0;
+            / 32767.0;
 
         let input = unsafe { ctx.get_joypad_bitmask(0, 0) };
         self.draw_controller(&mut fb, input, (lx, ly), (rx, ry));

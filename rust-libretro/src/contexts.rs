@@ -871,7 +871,7 @@ make_context!(InitContext, #[doc = "Functions that are safe to be called in [`Co
 make_context!(OptionsChangedContext, #[doc = "Functions that are safe to be called in [`Core::on_options_changed`]"]);
 
 make_context!(LoadGameSpecialContext, #[doc = "Functions that are safe to be called in [`Core::on_load_game_special`]"]);
-// into_generic!(LoadGameSpecialContext<'a>, LoadGameContext, 'a);
+into_generic!(LoadGameSpecialContext<'a>, LoadGameContext, 'a);
 
 make_context!(SetEnvironmentContext, #[doc = "Functions that are safe to be called in [`Core::on_set_environment`]"]);
 

@@ -45,8 +45,9 @@ pub trait Core: CoreOptions {
     /// **TODO:** Documentation
     fn on_set_controller_port_device(
         &mut self,
-        _port: std::os::raw::c_uint,
-        _device: std::os::raw::c_uint,
+        _port: u32,
+        _device: u32,
+        _ctx: &mut GenericContext,
     ) {
         // Do nothing
     }

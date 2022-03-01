@@ -654,10 +654,15 @@ pub unsafe fn set_proc_address_callback(
 #[proc::context(SetEnvironmentContext)]
 pub unsafe fn set_subsystem_info(
     callback: retro_environment_t,
-    data: retro_subsystem_info,
+    data: &[retro_subsystem_info],
 ) -> bool {
     // const struct retro_subsystem_info *
-    set(callback, RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO, data).unwrap_or(false)
+    set_ptr(
+        callback,
+        RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO,
+        data.as_ptr(),
+    )
+    .unwrap_or(false)
 }
 
 /// This environment call lets a libretro core tell the frontend
@@ -699,10 +704,15 @@ pub unsafe fn set_subsystem_info(
 #[proc::context(GenericContext)]
 pub unsafe fn set_controller_info(
     callback: retro_environment_t,
-    data: retro_controller_info,
+    data: &[retro_controller_info],
 ) -> bool {
     // const struct retro_controller_info *
-    set(callback, RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, data).unwrap_or(false)
+    set_ptr(
+        callback,
+        RETRO_ENVIRONMENT_SET_CONTROLLER_INFO,
+        data.as_ptr(),
+    )
+    .unwrap_or(false)
 }
 
 /// This environment call lets a libretro core tell the frontend

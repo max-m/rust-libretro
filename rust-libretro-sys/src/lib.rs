@@ -11,7 +11,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 #[macro_export]
 macro_rules! RETRO_DEVICE_SUBCLASS {
     ($base:expr, $id:expr) => {
-        ((id + 1) << RETRO_DEVICE_TYPE_SHIFT) | base
+        (($id + 1) << RETRO_DEVICE_TYPE_SHIFT) | $base
     };
 }
 

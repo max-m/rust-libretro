@@ -35,9 +35,16 @@ libc = "0.2.118"
 log = { version = "0.4.14", features = ["max_level_debug", "release_max_level_debug"] }
 image = "0.24.0"
 bytemuck = "1.7.3"
+byterepr = "0.1.0"
 
 [[example]]
 name = "input"
 path = "examples/input/lib.rs"
+crate-type = ["cdylib"]
+required-features = ["unstable-env-commands", "log"]
+
+[[example]]
+name = "test"
+path = "examples/test/lib.rs"
 crate-type = ["cdylib"]
 required-features = ["unstable-env-commands", "log"]

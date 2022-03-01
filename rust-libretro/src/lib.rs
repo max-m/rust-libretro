@@ -440,7 +440,14 @@ pub unsafe extern "C" fn retro_set_controller_port_device(
     log::trace!("retro_set_controller_port_device(port = {port}, device = {device})");
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        return wrapper.core.on_set_controller_port_device(port, device);
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
+
+        return wrapper
+            .core
+            .on_set_controller_port_device(port, device, &mut ctx);
     }
 
     panic!("retro_set_controller_port_device: Core has not been initialized yet!");
