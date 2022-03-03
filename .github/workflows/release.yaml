@@ -121,10 +121,11 @@ jobs:
         run: gzip ${{ env.RELEASE_FILE }}
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: svenstaro/upload-release-action@v2
         with:
-          tag_name: ${{ github.ref }}
-          name: rust-libretro ${{ github.ref_name }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          release_name: rust-libretro ${{ github.ref_name }}
+          file: ${{ env.RELEASE_FILE }}.gz
           draft: false
           prerelease: ${{ contains(github.ref, 'rc') }}
-          files: ${{ env.RELEASE_FILE }}.gz
