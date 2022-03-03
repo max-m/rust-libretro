@@ -17,6 +17,7 @@ Examples
 The following examples are available:
 - input: A simple core that visualizes the input of the first joypad.
 - test: A port of [libretro-samples/test](https://github.com/libretro/libretro-samples/tree/7418a585efd24c6506ca5f09f90c36268f0074ed/tests/test).
+- test-advanced: A port of [libretro-samples/test_advanced](https://github.com/libretro/libretro-samples/tree/7418a585efd24c6506ca5f09f90c36268f0074ed/tests/test_advanced).
 
 To build and run an example you can use the following commands:
 ```sh

@@ -463,22 +463,22 @@ impl InputTestCore {
         for active in [false, true] {
             let color = if active { ACTIVE_COLOR } else { None };
 
-            if !active || active && input.contains(JoypadState::UP) {
+            if !active || input.contains(JoypadState::UP) {
                 let up = &self.images.as_ref().unwrap().dpad_up;
                 Self::blit(fb, up, body_x + 83, body_y + 53, color);
             }
 
-            if !active || active && input.contains(JoypadState::DOWN) {
+            if !active || input.contains(JoypadState::DOWN) {
                 let down = &self.images.as_ref().unwrap().dpad_down;
                 Self::blit(fb, down, body_x + 83, body_y + 82, color);
             }
 
-            if !active || active && input.contains(JoypadState::LEFT) {
+            if !active || input.contains(JoypadState::LEFT) {
                 let left = &self.images.as_ref().unwrap().dpad_left;
                 Self::blit(fb, left, body_x + 61, body_y + 75, color);
             }
 
-            if !active || active && input.contains(JoypadState::RIGHT) {
+            if !active || input.contains(JoypadState::RIGHT) {
                 let right = &self.images.as_ref().unwrap().dpad_right;
                 Self::blit(fb, right, body_x + 90, body_y + 75, color);
             }

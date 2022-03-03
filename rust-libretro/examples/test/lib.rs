@@ -185,7 +185,7 @@ impl TestCore {
         let mut dir_x: i16 = 0;
         let mut dir_y: i16 = 0;
 
-        if !((self.analog_mouse && self.analog_mouse_relative) || !self.analog_mouse) {
+        if self.analog_mouse && !self.analog_mouse_relative {
             self.mouse_rel_x = 0;
             self.mouse_rel_y = 0;
         }
@@ -265,18 +265,18 @@ impl TestCore {
                 log::info!("Mouse #: {port}     middle pressed.      X: {mouse_x}   Y: {mouse_y}",);
             }
 
-            if (self.analog_mouse && self.analog_mouse_relative) || !self.analog_mouse {
+            if !self.analog_mouse || self.analog_mouse_relative {
                 self.mouse_rel_x += mouse_x;
                 self.mouse_rel_y += mouse_y;
             } else {
                 let x = mouse_x as f32 / WIDTH as f32;
                 let y = mouse_y as f32 / HEIGHT as f32;
 
-                if x < 0.45 || x > 0.55 || self.mouse_rel_x == 0 {
+                if !(0.45..=0.55).contains(&x) {
                     self.mouse_rel_x = mouse_x;
                 }
 
-                if y < 0.45 || y > 0.55 || self.mouse_rel_y == 0 {
+                if !(0.45..=0.55).contains(&y) {
                     self.mouse_rel_y = mouse_y;
                 }
             }
@@ -438,7 +438,7 @@ impl TestCore {
                 let size = fb.height as usize * fb.pitch as usize;
                 let data = unsafe { std::slice::from_raw_parts_mut(fb.data, size) };
                 FrameBuf {
-                    data: data,
+                    data,
 
                     width: fb.width,
                     height: fb.height,
@@ -733,9 +733,8 @@ impl Core for TestCore {
             _ => (),
         }
 
-        match ctx.get_variable("test_samplerate") {
-            Some(value) => self.sample_rate = value.parse().unwrap(),
-            _ => (),
+        if let Some(value) = ctx.get_variable("test_samplerate") {
+            self.sample_rate = value.parse().unwrap()
         }
 
         match ctx.get_variable("test_analog_mouse") {

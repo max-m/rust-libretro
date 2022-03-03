@@ -232,7 +232,7 @@ impl Parse for CoreOptions {
 
 impl Concat<CoreOptions> for Vec<CoreOptions> {
     fn concat(self) -> CoreOptions {
-        CoreOptions(self.into_iter().map(|x| x.0).flatten().collect::<Vec<_>>())
+        CoreOptions(self.into_iter().flat_map(|x| x.0).collect::<Vec<_>>())
     }
 }
 
@@ -296,7 +296,7 @@ impl Parse for CoreOptionCategories {
 
 impl Concat<CoreOptionCategories> for Vec<CoreOptionCategories> {
     fn concat(self) -> CoreOptionCategories {
-        CoreOptionCategories(self.into_iter().map(|x| x.0).flatten().collect::<Vec<_>>())
+        CoreOptionCategories(self.into_iter().flat_map(|x| x.0).collect::<Vec<_>>())
     }
 }
 
