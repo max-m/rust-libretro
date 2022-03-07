@@ -86,7 +86,7 @@ struct ExampleCore {
     option_1: bool,
     option_2: bool,
 
-    pixels: [u8; 800 * 600 * 4],
+    pixels: Vec<u8>,
     timer: i64,
     even: bool,
 }
@@ -95,7 +95,7 @@ retro_core!(ExampleCore {
     option_1: false,
     option_2: true,
 
-    pixels: [0; 800 * 600 * 4],
+    pixels: vec![0; 800 * 600 * 4],
     timer: 5_000_001,
     even: true,
 });
@@ -204,7 +204,7 @@ impl Core for ExampleCore {
                 chunk.fill(color);
             }
 
-            ctx.draw_frame(&self.pixels, width, height, width as u64 * 4);
+            ctx.draw_frame(self.pixels.as_ref(), width, height, width as u64 * 4);
         } else if ctx.can_dupe() {
             ctx.dupe_frame();
         }

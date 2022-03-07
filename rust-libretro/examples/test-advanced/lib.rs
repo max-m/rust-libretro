@@ -134,7 +134,7 @@ impl Default for State {
 struct AdvancedTestCore {
     pixel_format: retro_pixel_format,
     active_pixel_format: retro_pixel_format,
-    framebuffer: [u8; WIDTH as usize * HEIGHT as usize * 4],
+    framebuffer: Vec<u8>,
 
     state: State,
 
@@ -151,7 +151,7 @@ impl Default for AdvancedTestCore {
         Self {
             pixel_format: retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888,
             active_pixel_format: retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888,
-            framebuffer: [0; WIDTH as usize * HEIGHT as usize * 4],
+            framebuffer: vec![0; WIDTH as usize * HEIGHT as usize * 4],
 
             sine: signal::rate(SAMPLE_RATE)
                 .const_hz(FREQUENCY)

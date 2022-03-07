@@ -20,9 +20,3 @@ Release builds can be compiled with `cargo build --release` or `make release`. A
 The [Makefile](Makefile) also provides a `native` target that instructs `rustc` to optimize the produced code for your host CPU only.
 
 One easy way to test your compiled core is to use RetroArch’s CLI: `retroarch -L <path to your built library>`
-
-Note for Windows users:
------------------------
-
-In an initial test it seemed like only release builds were working.
-When loading a debug build RetroArch closed immediately.

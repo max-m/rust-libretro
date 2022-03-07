@@ -118,7 +118,7 @@ struct TestCore {
     old_select: [bool; PORTS],
     old_strength_weak: [u16; PORTS],
 
-    framebuffer: [u8; WIDTH as usize * HEIGHT as usize * 4],
+    framebuffer: Vec<u8>,
 }
 
 retro_core!(TestCore {
@@ -143,7 +143,7 @@ retro_core!(TestCore {
     old_select: [false; PORTS],
     old_strength_weak: [0; PORTS],
 
-    framebuffer: [0; WIDTH as usize * HEIGHT as usize * 4],
+    framebuffer: vec![0; WIDTH as usize * HEIGHT as usize * 4],
 });
 
 impl TestCore {
@@ -447,7 +447,7 @@ impl TestCore {
             }
             // use our own fallback buffer instead
             _ => FrameBuf {
-                data: &mut self.framebuffer,
+                data: self.framebuffer.as_mut(),
 
                 width: WIDTH,
                 height: HEIGHT,

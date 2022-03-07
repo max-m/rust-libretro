@@ -42,12 +42,12 @@ struct FrameBuf<'a> {
 
 struct InputTestCore {
     images: Option<Images>,
-    framebuffer: [u8; WIDTH as usize * HEIGHT as usize * 4],
+    framebuffer: Vec<u8>,
 }
 
 retro_core!(InputTestCore {
     images: None,
-    framebuffer: [0; WIDTH as usize * HEIGHT as usize * 4],
+    framebuffer: vec![0; WIDTH as usize * HEIGHT as usize * 4],
 });
 
 impl CoreOptions for InputTestCore {}
