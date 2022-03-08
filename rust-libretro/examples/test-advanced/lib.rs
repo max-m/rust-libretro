@@ -322,9 +322,9 @@ impl AdvancedTestCore {
             0x46, 0x47, 0x48, 0x49,
         ];
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let color = Pixel::rgb(r, g, b, fb.format);
 
@@ -385,9 +385,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let red = Pixel::rgb(255, 0, 0, fb.format);
@@ -425,9 +425,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let black = Pixel::rgb(0, 0, 0, fb.format);
@@ -458,9 +458,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let black = Pixel::rgb(0, 0, 0, fb.format);
@@ -491,9 +491,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let color = if self.state.frame % 2 == 1 {
             Pixel::rgb(255, 255, 255, fb.format)
@@ -520,9 +520,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let black = Pixel::rgb(0, 0, 0, fb.format);
@@ -546,9 +546,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let red = Pixel::rgb(255, 0, 0, fb.format);
@@ -569,7 +569,7 @@ impl AdvancedTestCore {
             data[bot] = if x & 1 == 1 { yellow } else { red };
         }
 
-        for y in 0..WIDTH {
+        for y in 0..HEIGHT {
             let l = y as usize * pitch;
             let r = (y as usize * pitch) + WIDTH as usize - 1;
 
@@ -589,9 +589,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let mod_val = HEIGHT as u32;
         let cmp_val = HEIGHT as u32 / 2;
@@ -635,9 +635,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let color;
 
@@ -677,9 +677,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
 
@@ -766,9 +766,9 @@ impl AdvancedTestCore {
             return;
         }
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
         let pitch = fb.pitch as usize / Pixel::size(fb.format);
+        let size = fb.height as usize * pitch;
+        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
 
         if self.inp_state[0].bits() != self.state.test4a[27 * 3 + 1]
             || self.inp_state[1].bits() != self.state.test4a[27 * 3 + 2]
