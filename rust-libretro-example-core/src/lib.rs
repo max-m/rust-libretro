@@ -1,52 +1,15 @@
-use rust_libretro::{contexts::*, core::Core, proc::*, retro_core, sys::*, types::*};
+use rust_libretro::{
+    contexts::*, core::Core, input_descriptors, proc::*, retro_core, sys::*, types::*,
+};
 use std::ffi::CString;
 
-// TODO: Write a neater abstraction / macro
-const INPUT_DESCRIPTORS: &[retro_input_descriptor] = &[
-    retro_input_descriptor {
-        port: 0,
-        device: RETRO_DEVICE_JOYPAD,
-        index: 0,
-        id: RETRO_DEVICE_ID_JOYPAD_UP,
-        description: b"Up\0" as *const u8 as *const libc::c_char,
-    },
-    retro_input_descriptor {
-        port: 0,
-        device: RETRO_DEVICE_JOYPAD,
-        index: 0,
-        id: RETRO_DEVICE_ID_JOYPAD_DOWN,
-        description: b"Down\0" as *const u8 as *const libc::c_char,
-    },
-    retro_input_descriptor {
-        port: 0,
-        device: RETRO_DEVICE_JOYPAD,
-        index: 0,
-        id: RETRO_DEVICE_ID_JOYPAD_LEFT,
-        description: b"Left\0" as *const u8 as *const libc::c_char,
-    },
-    retro_input_descriptor {
-        port: 0,
-        device: RETRO_DEVICE_JOYPAD,
-        index: 0,
-        id: RETRO_DEVICE_ID_JOYPAD_RIGHT,
-        description: b"Right\0" as *const u8 as *const libc::c_char,
-    },
-    retro_input_descriptor {
-        port: 0,
-        device: RETRO_DEVICE_JOYPAD,
-        index: 0,
-        id: RETRO_DEVICE_ID_JOYPAD_A,
-        description: b"Action\0" as *const u8 as *const libc::c_char,
-    },
-    // End of list
-    retro_input_descriptor {
-        port: 0,
-        device: 0,
-        index: 0,
-        id: 0,
-        description: 0 as *const libc::c_char,
-    },
-];
+const INPUT_DESCRIPTORS: &[retro_input_descriptor] = &input_descriptors!(
+    { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "Up" },
+    { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "Down" },
+    { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "Left" },
+    { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Right" },
+    { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A, "Action" },
+);
 
 #[derive(CoreOptions)]
 #[categories({

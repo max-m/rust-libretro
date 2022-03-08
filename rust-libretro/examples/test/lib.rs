@@ -19,7 +19,10 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use libc::c_char;
-use rust_libretro::{contexts::*, core::Core, proc::CoreOptions, retro_core, sys::*, types::*};
+use rust_libretro::{
+    contexts::*, core::Core, input_descriptor, input_descriptors, proc::CoreOptions, retro_core,
+    sys::*, types::*,
+};
 use std::ffi::CString;
 
 const WIDTH: u32 = 320;
@@ -588,45 +591,12 @@ impl Core for TestCore {
     }
 
     fn on_init(&mut self, ctx: &mut InitContext) {
-        // TODO: Write a neater abstraction / macro
-        const INPUT_DESCRIPTORS: &[retro_input_descriptor] = &[
-            retro_input_descriptor {
-                port: 0,
-                device: RETRO_DEVICE_JOYPAD,
-                index: 0,
-                id: RETRO_DEVICE_ID_JOYPAD_UP,
-                description: b"Up\0".as_ptr() as *const _,
-            },
-            retro_input_descriptor {
-                port: 0,
-                device: RETRO_DEVICE_JOYPAD,
-                index: 0,
-                id: RETRO_DEVICE_ID_JOYPAD_DOWN,
-                description: b"Down\0".as_ptr() as *const _,
-            },
-            retro_input_descriptor {
-                port: 0,
-                device: RETRO_DEVICE_JOYPAD,
-                index: 0,
-                id: RETRO_DEVICE_ID_JOYPAD_LEFT,
-                description: b"Left\0".as_ptr() as *const _,
-            },
-            retro_input_descriptor {
-                port: 0,
-                device: RETRO_DEVICE_JOYPAD,
-                index: 0,
-                id: RETRO_DEVICE_ID_JOYPAD_RIGHT,
-                description: b"Right\0".as_ptr() as *const _,
-            },
-            // End of list
-            retro_input_descriptor {
-                port: 0,
-                device: 0,
-                index: 0,
-                id: 0,
-                description: 0 as *const libc::c_char,
-            },
-        ];
+        const INPUT_DESCRIPTORS: &[retro_input_descriptor] = &input_descriptors!(
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP, "Up" },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN, "Down" },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT, "Left" },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "Right" },
+        );
 
         let gctx: GenericContext = ctx.into();
         gctx.set_input_descriptors(INPUT_DESCRIPTORS);
@@ -738,91 +708,108 @@ impl Core for TestCore {
         match device {
             RETRO_DEVICE_NONE => (),
             RETRO_DEVICE_LIGHTGUN => {
-                descriptors[0].port = port;
-                descriptors[0].device = RETRO_DEVICE_JOYPAD;
-                descriptors[0].index = 0;
-                descriptors[0].id = RETRO_DEVICE_ID_LIGHTGUN_TRIGGER;
-                descriptors[0].description = b"Gun Trigger\0".as_ptr() as *const _;
-
-                descriptors[1].port = port;
-                descriptors[1].device = RETRO_DEVICE_JOYPAD;
-                descriptors[1].index = 0;
-                descriptors[1].id = RETRO_DEVICE_ID_LIGHTGUN_RELOAD;
-                descriptors[1].description = b"Gun Reload\0".as_ptr() as *const _;
-
-                descriptors[2].port = port;
-                descriptors[2].device = RETRO_DEVICE_JOYPAD;
-                descriptors[2].index = 0;
-                descriptors[2].id = RETRO_DEVICE_ID_LIGHTGUN_START;
-                descriptors[2].description = b"Gun Start\0".as_ptr() as *const _;
-
-                descriptors[3].port = port;
-                descriptors[3].device = RETRO_DEVICE_JOYPAD;
-                descriptors[3].index = 0;
-                descriptors[3].id = RETRO_DEVICE_ID_LIGHTGUN_SELECT;
-                descriptors[3].description = b"Gun Select\0".as_ptr() as *const _;
+                descriptors[0] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_LIGHTGUN_TRIGGER,
+                    "Gun Trigger"
+                );
+                descriptors[1] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_LIGHTGUN_RELOAD,
+                    "Gun Reload"
+                );
+                descriptors[2] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_LIGHTGUN_START,
+                    "Gun Start"
+                );
+                descriptors[3] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_LIGHTGUN_SELECT,
+                    "Gun Select"
+                );
             }
             RETRO_DEVICE_JOYPAD => {
-                descriptors[0].port = port;
-                descriptors[0].device = RETRO_DEVICE_JOYPAD;
-                descriptors[0].index = 0;
-                descriptors[0].id = RETRO_DEVICE_ID_JOYPAD_UP;
-                descriptors[0].description = b"Up\0".as_ptr() as *const _;
-
-                descriptors[1].port = port;
-                descriptors[1].device = RETRO_DEVICE_JOYPAD;
-                descriptors[1].index = 0;
-                descriptors[1].id = RETRO_DEVICE_ID_JOYPAD_DOWN;
-                descriptors[1].description = b"Down\0".as_ptr() as *const _;
-
-                descriptors[2].port = port;
-                descriptors[2].device = RETRO_DEVICE_JOYPAD;
-                descriptors[2].index = 0;
-                descriptors[2].id = RETRO_DEVICE_ID_JOYPAD_LEFT;
-                descriptors[2].description = b"Left\0".as_ptr() as *const _;
-
-                descriptors[3].port = port;
-                descriptors[3].device = RETRO_DEVICE_JOYPAD;
-                descriptors[3].index = 0;
-                descriptors[3].id = RETRO_DEVICE_ID_JOYPAD_RIGHT;
-                descriptors[3].description = b"Right\0".as_ptr() as *const _;
+                descriptors[0] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_UP,
+                    "Up"
+                );
+                descriptors[1] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_DOWN,
+                    "Down"
+                );
+                descriptors[2] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_LEFT,
+                    "Left"
+                );
+                descriptors[3] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_RIGHT,
+                    "Right"
+                );
             }
             _ => {
-                descriptors[0].port = port;
-                descriptors[0].device = RETRO_DEVICE_JOYPAD;
-                descriptors[0].index = 0;
-                descriptors[0].id = RETRO_DEVICE_ID_JOYPAD_UP;
-                descriptors[0].description = b"Up\0".as_ptr() as *const _;
-
-                descriptors[1].port = port;
-                descriptors[1].device = RETRO_DEVICE_JOYPAD;
-                descriptors[1].index = 0;
-                descriptors[1].id = RETRO_DEVICE_ID_JOYPAD_DOWN;
-                descriptors[1].description = b"Down\0".as_ptr() as *const _;
-
-                descriptors[2].port = port;
-                descriptors[2].device = RETRO_DEVICE_JOYPAD;
-                descriptors[2].index = 0;
-                descriptors[2].id = RETRO_DEVICE_ID_JOYPAD_LEFT;
-                descriptors[2].description = b"Left\0".as_ptr() as *const _;
-
-                descriptors[3].port = port;
-                descriptors[3].device = RETRO_DEVICE_JOYPAD;
-                descriptors[3].index = 0;
-                descriptors[3].id = RETRO_DEVICE_ID_JOYPAD_RIGHT;
-                descriptors[3].description = b"Right\0".as_ptr() as *const _;
-
-                descriptors[4].port = port;
-                descriptors[4].device = RETRO_DEVICE_JOYPAD;
-                descriptors[4].index = 0;
-                descriptors[4].id = RETRO_DEVICE_ID_JOYPAD_START;
-                descriptors[4].description = b"Digital Start\0".as_ptr() as *const _;
-
-                descriptors[5].port = port;
-                descriptors[5].device = RETRO_DEVICE_JOYPAD;
-                descriptors[5].index = 0;
-                descriptors[5].id = RETRO_DEVICE_ID_JOYPAD_SELECT;
-                descriptors[5].description = b"Digital Select\0".as_ptr() as *const _;
+                descriptors[0] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_UP,
+                    "Up"
+                );
+                descriptors[1] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_DOWN,
+                    "Down"
+                );
+                descriptors[2] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_LEFT,
+                    "Left"
+                );
+                descriptors[3] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_RIGHT,
+                    "Right"
+                );
+                descriptors[4] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_START,
+                    "Digital Start"
+                );
+                descriptors[5] = input_descriptor!(
+                    port,
+                    RETRO_DEVICE_JOYPAD,
+                    0,
+                    RETRO_DEVICE_ID_JOYPAD_SELECT,
+                    "Digital Select"
+                );
             }
         }
 

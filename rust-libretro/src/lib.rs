@@ -7,6 +7,7 @@
 mod core_wrapper;
 #[cfg(feature = "log")]
 mod logger;
+mod macros;
 
 pub mod contexts;
 pub mod core;
@@ -14,6 +15,7 @@ pub mod environment;
 pub mod types;
 pub mod util;
 
+pub use macros::*;
 pub use rust_libretro_proc as proc;
 pub use rust_libretro_sys as sys;
 
