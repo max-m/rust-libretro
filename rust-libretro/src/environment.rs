@@ -195,9 +195,12 @@ pub unsafe fn get_system_directory<'a>(callback: retro_environment_t) -> Option<
 /// format.
 #[proc::context(LoadGameContext)]
 #[proc::context(GetAvInfoContext)]
-pub unsafe fn set_pixel_format(callback: retro_environment_t, format: retro_pixel_format) -> bool {
+pub unsafe fn set_pixel_format<F: Into<retro_pixel_format>>(
+    callback: retro_environment_t,
+    format: F,
+) -> bool {
     // const enum retro_pixel_format *
-    set(callback, RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, format).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, format.into()).unwrap_or(false)
 }
 
 /// Sets an array of retro_input_descriptors.

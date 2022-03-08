@@ -253,6 +253,48 @@ impl Rotation {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum PixelFormat {
+    XRGB1555 = retro_pixel_format::RETRO_PIXEL_FORMAT_0RGB1555 as isize,
+    XRGB8888 = retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888 as isize,
+    RGB565 = retro_pixel_format::RETRO_PIXEL_FORMAT_RGB565 as isize,
+    UNKNOWN = retro_pixel_format::RETRO_PIXEL_FORMAT_UNKNOWN as isize,
+}
+
+impl PixelFormat {
+    #[inline]
+    pub fn bit_per_pixel(self) -> usize {
+        match self {
+            Self::XRGB1555 => 2,
+            Self::XRGB8888 => 4,
+            Self::RGB565 => 2,
+            Self::UNKNOWN => 0,
+        }
+    }
+}
+
+impl From<retro_pixel_format> for PixelFormat {
+    fn from(other: retro_pixel_format) -> Self {
+        match other {
+            retro_pixel_format::RETRO_PIXEL_FORMAT_0RGB1555 => Self::XRGB1555,
+            retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888 => Self::XRGB8888,
+            retro_pixel_format::RETRO_PIXEL_FORMAT_RGB565 => Self::RGB565,
+            _ => Self::UNKNOWN,
+        }
+    }
+}
+
+impl From<PixelFormat> for retro_pixel_format {
+    fn from(other: PixelFormat) -> Self {
+        match other {
+            PixelFormat::XRGB1555 => Self::RETRO_PIXEL_FORMAT_0RGB1555,
+            PixelFormat::XRGB8888 => Self::RETRO_PIXEL_FORMAT_XRGB8888,
+            PixelFormat::RGB565 => Self::RETRO_PIXEL_FORMAT_RGB565,
+            PixelFormat::UNKNOWN => Self::RETRO_PIXEL_FORMAT_UNKNOWN,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PerfCounter {
     #[allow(unused)]
@@ -278,6 +320,7 @@ pub struct Position {
 /// Data structures used by experimental libretro environment function calls
 #[proc::unstable(feature = "env-commands")]
 pub mod unstable {
+    use super::PixelFormat;
     use core::marker::PhantomData;
     use rust_libretro_sys::*;
 
@@ -402,14 +445,33 @@ pub mod unstable {
     // TODO: Can we get rid of the raw pointer and PhantomData in an ergonomic way?
     pub struct Framebuffer<'a> {
         pub data: *mut u8,
+        pub data_len: usize,
         pub phantom: PhantomData<&'a mut [u8]>,
 
         pub width: u32,
         pub height: u32,
         pub pitch: usize,
-        pub format: retro_pixel_format,
+        pub format: PixelFormat,
         pub access_flags: MemoryAccess,
         pub memory_flags: MemoryType,
+    }
+
+    impl<'a> Framebuffer<'a> {
+        pub fn borrow_slice(&self) -> &'a [u8] {
+            unsafe { std::slice::from_raw_parts(self.data, self.data_len) }
+        }
+
+        pub unsafe fn as_slice<'b>(&self) -> &'b [u8] {
+            unsafe { std::slice::from_raw_parts(self.data, self.data_len) }
+        }
+
+        pub fn borrow_slice_mut(&self) -> &'a mut [u8] {
+            unsafe { std::slice::from_raw_parts_mut(self.data, self.data_len) }
+        }
+
+        pub unsafe fn as_slice_mut<'b>(&self) -> &'b mut [u8] {
+            unsafe { std::slice::from_raw_parts_mut(self.data, self.data_len) }
+        }
     }
 }
 pub use unstable::*;

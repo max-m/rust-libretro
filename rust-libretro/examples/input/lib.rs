@@ -1,4 +1,3 @@
-use core::marker::PhantomData;
 use image::{DynamicImage, ImageFormat, ImageResult};
 use rust_libretro::{
     contexts::*,
@@ -31,24 +30,11 @@ struct Images {
     trigger_r: DynamicImage,
 }
 
-struct FrameBuf<'a> {
-    data: *mut u8,
-    phantom: PhantomData<&'a mut [u8]>,
-
-    width: u32,
-    height: u32,
-    pitch: u64,
-}
-
 struct InputTestCore {
     images: Option<Images>,
-    framebuffer: Vec<u8>,
 }
 
-retro_core!(InputTestCore {
-    images: None,
-    framebuffer: vec![0; WIDTH as usize * HEIGHT as usize * 4],
-});
+retro_core!(InputTestCore { images: None });
 
 impl CoreOptions for InputTestCore {}
 impl Core for InputTestCore {
@@ -95,7 +81,7 @@ impl Core for InputTestCore {
         use image::imageops::{flip_horizontal, flip_vertical, rotate90};
         use DynamicImage::ImageRgba8;
 
-        ctx.set_pixel_format(retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888);
+        ctx.set_pixel_format(PixelFormat::XRGB8888);
         ctx.set_performance_level(0);
 
         fn load(buf: &[u8]) -> ImageResult<DynamicImage> {
@@ -139,33 +125,17 @@ impl Core for InputTestCore {
     #[inline]
     fn on_run(&mut self, ctx: &mut RunContext, _delta_us: Option<i64>) {
         // try to get a software framebuffer from the frontend
-        let fb = unsafe { ctx.get_current_framebuffer(WIDTH, HEIGHT, MemoryAccess::WRITE) };
-        let mut fb = match fb {
-            Ok(fb)
-                if fb.format == retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888
-                    && !fb.data.is_null() =>
-            {
-                FrameBuf {
-                    data: fb.data,
-                    phantom: PhantomData,
-
-                    width: fb.width,
-                    height: fb.height,
-                    pitch: fb.pitch as u64,
-                }
-            }
-            // use our own fallback buffer instead
-            _ => FrameBuf {
-                data: self.framebuffer.as_mut_ptr(),
-                phantom: PhantomData,
-
-                width: WIDTH,
-                height: HEIGHT,
-                pitch: WIDTH as u64 * 4,
-            },
+        let fb = unsafe {
+            ctx.get_current_framebuffer_or_fallback(
+                WIDTH,
+                HEIGHT,
+                MemoryAccess::WRITE,
+                PixelFormat::XRGB8888,
+            )
         };
+        let data = unsafe { fb.as_slice_mut() };
 
-        Self::fill(&mut fb, 0x62, 0x62, 0x62, 0xFF);
+        Self::fill(data, 0x62, 0x62, 0x62, 0xFF);
 
         let lx = ctx.get_input_state(
             0,
@@ -197,31 +167,27 @@ impl Core for InputTestCore {
             / 32767.0;
 
         let input = unsafe { ctx.get_joypad_bitmask(0, 0) };
-        self.draw_controller(&mut fb, input, (lx, ly), (rx, ry));
+        self.draw_controller(&fb, input, (lx, ly), (rx, ry));
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data, size) };
-        ctx.draw_frame(data, fb.width, fb.height, fb.pitch);
+        let width = fb.width;
+        let height = fb.height;
+        let pitch = fb.pitch as u64;
+        ctx.draw_frame(data, width, height, pitch);
     }
 }
 
 impl InputTestCore {
-    fn fill(dst: &mut FrameBuf, r: u8, g: u8, b: u8, a: u8) {
-        if !dst.data.is_null() {
-            let size = dst.height as usize * dst.pitch as usize;
-            let data = unsafe { std::slice::from_raw_parts_mut(dst.data as *mut u8, size) };
-
-            // This should not fail, but just to be safe
-            if let Ok(data) = bytemuck::try_cast_slice_mut(data) {
-                let value = ((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | b as u32;
-                data.fill(value);
-            } else {
-                for chunk in data.chunks_exact_mut(4) {
-                    chunk[0] = b;
-                    chunk[1] = g;
-                    chunk[2] = r;
-                    chunk[3] = a;
-                }
+    fn fill(dst: &mut [u8], r: u8, g: u8, b: u8, a: u8) {
+        // This should not fail, but just to be safe
+        if let Ok(data) = bytemuck::try_cast_slice_mut(dst) {
+            let value = ((a as u32) << 24) | ((r as u32) << 16) | ((g as u32) << 8) | b as u32;
+            data.fill(value);
+        } else {
+            for chunk in dst.chunks_exact_mut(4) {
+                chunk[0] = b;
+                chunk[1] = g;
+                chunk[2] = r;
+                chunk[3] = a;
             }
         }
     }
@@ -257,7 +223,7 @@ impl InputTestCore {
     }
 
     fn blit(
-        dst: &mut FrameBuf,
+        dst: &Framebuffer,
         src: &DynamicImage,
         x_offset: u32,
         y_offset: u32,
@@ -265,8 +231,7 @@ impl InputTestCore {
     ) {
         use image::GenericImageView;
 
-        let size = dst.height as usize * dst.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(dst.data, size) };
+        let data = unsafe { std::slice::from_raw_parts_mut(dst.data, dst.data_len) };
 
         let bpp = dst.pitch as usize / dst.width as usize;
 
@@ -293,7 +258,7 @@ impl InputTestCore {
 
     fn draw_controller(
         &self,
-        fb: &mut FrameBuf,
+        fb: &Framebuffer,
         input: JoypadState,
         analog_l: (f32, f32),
         analog_r: (f32, f32),
@@ -459,7 +424,7 @@ impl InputTestCore {
         );
     }
 
-    fn draw_dpad(&self, fb: &mut FrameBuf, body_x: u32, body_y: u32, input: JoypadState) {
+    fn draw_dpad(&self, fb: &Framebuffer, body_x: u32, body_y: u32, input: JoypadState) {
         for active in [false, true] {
             let color = if active { ACTIVE_COLOR } else { None };
 

@@ -1,8 +1,12 @@
 //! This module contains abstractions of the libretro environment callbacks.
 use crate::core_wrapper::Interfaces;
+use once_cell::unsync::Lazy;
 use std::collections::HashMap;
 
 use super::*;
+
+/// This would only be used in [`Core::on_run`] from a single thread.
+static mut FALLBACK_FRAMEBUFFER: Lazy<Vec<u8>> = Lazy::new(Vec::new);
 
 #[doc(hidden)]
 macro_rules! into_generic {
@@ -1326,6 +1330,7 @@ impl<'a> RunContext<'_> {
         width: u32,
         height: u32,
         access_flags: MemoryAccess,
+        format: PixelFormat,
     ) -> Result<Framebuffer, Box<dyn std::error::Error>> {
         let ctx: GenericContext = self.into();
 
@@ -1334,7 +1339,7 @@ impl<'a> RunContext<'_> {
             width,
             height,
             pitch: 0,
-            format: retro_pixel_format::RETRO_PIXEL_FORMAT_0RGB1555,
+            format: format.into(),
             access_flags: access_flags.bits(),
             memory_flags: 0,
         });
@@ -1347,12 +1352,13 @@ impl<'a> RunContext<'_> {
                 // Thus we cannot pass the `FrameBuffer` to `Self::draw_frame` for example.
                 return Ok(Framebuffer {
                     data: fb.data as *mut u8,
+                    data_len: fb.height as usize * fb.pitch as usize,
                     phantom: ::core::marker::PhantomData,
 
                     width: fb.width,
                     height: fb.height,
                     pitch: fb.pitch as usize,
-                    format: fb.format,
+                    format: fb.format.into(),
                     access_flags: MemoryAccess::from_bits_unchecked(fb.access_flags),
                     memory_flags: MemoryType::from_bits_unchecked(fb.memory_flags),
                 });
@@ -1360,6 +1366,42 @@ impl<'a> RunContext<'_> {
         }
 
         Err("Failed to get current software framebuffer".into())
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub fn get_current_framebuffer_or_fallback(
+        &self,
+        width: u32,
+        height: u32,
+        access_flags: MemoryAccess,
+        format: PixelFormat,
+    ) -> Framebuffer {
+        match self.get_current_framebuffer(width, height, access_flags, format) {
+            Ok(fb) if fb.access_flags.intersects(access_flags) => fb,
+            _ => {
+                let data = unsafe { &mut FALLBACK_FRAMEBUFFER };
+
+                let pitch = width as usize * format.bit_per_pixel();
+                let data_len = width as usize * height as usize * pitch;
+
+                if data.len() < data_len {
+                    data.resize(data_len, 0);
+                }
+
+                Framebuffer {
+                    data: data.as_mut_ptr(),
+                    data_len,
+                    phantom: ::core::marker::PhantomData,
+
+                    width,
+                    height,
+                    pitch,
+                    format,
+                    access_flags: MemoryAccess::READ | MemoryAccess::WRITE,
+                    memory_flags: MemoryType::UNCACHED,
+                }
+            }
+        }
     }
 
     /// Draws a new frame if [`RunContext::video_refresh_callback`] has been set

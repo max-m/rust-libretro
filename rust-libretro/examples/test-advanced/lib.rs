@@ -18,7 +18,7 @@
 //! WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use core::marker::PhantomData;
+use bytemuck::Pod;
 use dasp_sample::Sample;
 use dasp_signal::{self as signal, ConstHz, IntoInterleavedSamples, ScaleAmp, Signal, Sine};
 use num::Integer;
@@ -132,9 +132,8 @@ impl Default for State {
     }
 })]
 struct AdvancedTestCore {
-    pixel_format: retro_pixel_format,
-    active_pixel_format: retro_pixel_format,
-    framebuffer: Vec<u8>,
+    pixel_format: PixelFormat,
+    active_pixel_format: PixelFormat,
 
     state: State,
 
@@ -149,9 +148,8 @@ struct AdvancedTestCore {
 impl Default for AdvancedTestCore {
     fn default() -> Self {
         Self {
-            pixel_format: retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888,
-            active_pixel_format: retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888,
-            framebuffer: vec![0; WIDTH as usize * HEIGHT as usize * 4],
+            pixel_format: PixelFormat::XRGB8888,
+            active_pixel_format: PixelFormat::XRGB8888,
 
             sine: signal::rate(SAMPLE_RATE)
                 .const_hz(FREQUENCY)
@@ -174,38 +172,23 @@ retro_core!(AdvancedTestCore::default());
 struct Pixel;
 impl Pixel {
     #[inline]
-    pub fn size(format: retro_pixel_format) -> usize {
-        use retro_pixel_format::*;
-
-        match format {
-            RETRO_PIXEL_FORMAT_0RGB1555 => 2,
-            RETRO_PIXEL_FORMAT_XRGB8888 => 4,
-            RETRO_PIXEL_FORMAT_RGB565 => 2,
-            _ => 0,
-        }
-    }
-
-    #[inline]
-    pub fn rgb<T>(r: u8, g: u8, b: u8, format: retro_pixel_format) -> T
+    pub fn rgb<T>(r: u8, g: u8, b: u8, format: PixelFormat) -> T
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
-        use retro_pixel_format::*;
+        use PixelFormat::*;
 
         let r: u32 = r.as_();
         let g: u32 = g.as_();
         let b: u32 = b.as_();
 
         let value: T = match format {
-            RETRO_PIXEL_FORMAT_0RGB1555 => {
-                ((r & 0b11111) << 10) | ((g & 0b11111) << 5) | (b & 0b11111)
-            }
-            RETRO_PIXEL_FORMAT_XRGB8888 => ((r as u32) << 16) | ((g as u32) << 8) | b,
-            RETRO_PIXEL_FORMAT_RGB565 => {
-                ((r & 0b11111) << 11) | ((g & 0b111111) << 5) | (b & 0b11111)
-            }
+            XRGB1555 => ((r & 0b11111) << 10) | ((g & 0b11111) << 5) | (b & 0b11111),
+            XRGB8888 => ((r as u32) << 16) | ((g as u32) << 8) | b,
+            RGB565 => ((r & 0b11111) << 11) | ((g & 0b111111) << 5) | (b & 0b11111),
             _ => r | g | b,
         }
         .as_();
@@ -214,26 +197,16 @@ impl Pixel {
     }
 }
 
-struct FrameBuf<'a> {
-    data: *mut u8,
-    phantom: PhantomData<&'a mut [u8]>,
-
-    width: u32,
-    height: u32,
-    pitch: u64,
-    format: retro_pixel_format,
-}
-
 macro_rules! impl_pixfmt {
     ($name:ident $(, $($opt:ident: $ty:ty),*)?) => {
         #[allow(clippy::too_many_arguments)]
-        fn $name(&mut self, fb: &FrameBuf $(, $($opt: $ty),*)?) {
-            use retro_pixel_format::*;
+        fn $name(&mut self, fb: &Framebuffer $(, $($opt: $ty),*)?) {
+            use PixelFormat::*;
 
             ::paste::paste! {
                 match fb.format {
-                    RETRO_PIXEL_FORMAT_XRGB8888 => self.[<$name _inner>]::<u32>(fb $(, $($opt),*)?),
-                    RETRO_PIXEL_FORMAT_0RGB1555 | RETRO_PIXEL_FORMAT_RGB565 => {
+                    XRGB8888 => self.[<$name _inner>]::<u32>(fb $(, $($opt),*)?),
+                    XRGB1555 | RGB565 => {
                         self.[<$name _inner>]::<u16>(fb $(, $($opt),*)?)
                     }
                     _ => (),
@@ -256,7 +229,7 @@ impl AdvancedTestCore {
     #[allow(clippy::too_many_arguments)]
     fn render_character_inner<T>(
         &self,
-        fb: &FrameBuf,
+        fb: &Framebuffer,
         r: u8,
         g: u8,
         b: u8,
@@ -266,6 +239,7 @@ impl AdvancedTestCore {
     ) where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         // Taken from ZSNES
@@ -322,9 +296,9 @@ impl AdvancedTestCore {
             0x46, 0x47, 0x48, 0x49,
         ];
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let color = Pixel::rgb(r, g, b, fb.format);
 
@@ -339,7 +313,7 @@ impl AdvancedTestCore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn render_text(&mut self, fb: &FrameBuf, r: u8, g: u8, b: u8, text: &str, x: u16, y: u16) {
+    fn render_text(&mut self, fb: &Framebuffer, r: u8, g: u8, b: u8, text: &str, x: u16, y: u16) {
         // does not handle grapheme clusters!
         for (i, mut chr) in text.chars().enumerate() {
             if !chr.is_ascii() {
@@ -352,7 +326,7 @@ impl AdvancedTestCore {
 
     fn render_outlined_text(
         &mut self,
-        fb: &FrameBuf,
+        fb: &Framebuffer,
         fg: (u8, u8, u8),
         bg: (u8, u8, u8),
         text: &str,
@@ -375,19 +349,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_1a);
-    fn test_1a_inner<T>(&self, fb: &FrameBuf)
+    fn test_1a_inner<T>(&self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let red = Pixel::rgb(255, 0, 0, fb.format);
@@ -415,19 +390,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_1b);
-    fn test_1b_inner<T>(&self, fb: &FrameBuf)
+    fn test_1b_inner<T>(&self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let black = Pixel::rgb(0, 0, 0, fb.format);
@@ -448,19 +424,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_1c);
-    fn test_1c_inner<T>(&self, fb: &FrameBuf)
+    fn test_1c_inner<T>(&self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let black = Pixel::rgb(0, 0, 0, fb.format);
@@ -481,19 +458,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_1d);
-    fn test_1d_inner<T>(&self, fb: &FrameBuf)
+    fn test_1d_inner<T>(&self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let color = if self.state.frame % 2 == 1 {
             Pixel::rgb(255, 255, 255, fb.format)
@@ -510,19 +488,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_1e);
-    fn test_1e_inner<T>(&self, fb: &FrameBuf)
+    fn test_1e_inner<T>(&self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let black = Pixel::rgb(0, 0, 0, fb.format);
@@ -536,19 +515,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_1f);
-    fn test_1f_inner<T>(&self, fb: &FrameBuf)
+    fn test_1f_inner<T>(&self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let red = Pixel::rgb(255, 0, 0, fb.format);
@@ -579,19 +559,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_2a);
-    fn test_2a_inner<T>(&mut self, fb: &FrameBuf)
+    fn test_2a_inner<T>(&mut self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let mod_val = HEIGHT as u32;
         let cmp_val = HEIGHT as u32 / 2;
@@ -625,19 +606,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_2b);
-    fn test_2b_inner<T>(&mut self, fb: &FrameBuf)
+    fn test_2b_inner<T>(&mut self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let color;
 
@@ -666,20 +648,21 @@ impl AdvancedTestCore {
         }
     }
 
-    impl_pixfmt!(test_3a, ctx: &mut RunContext);
-    fn test_3a_inner<T>(&mut self, fb: &FrameBuf, ctx: &mut RunContext)
+    impl_pixfmt!(test_3a, ctx: &RunContext);
+    fn test_3a_inner<T>(&mut self, fb: &Framebuffer, ctx: &RunContext)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
 
@@ -756,19 +739,20 @@ impl AdvancedTestCore {
     }
 
     impl_pixfmt!(test_4a);
-    fn test_4a_inner<T>(&mut self, fb: &FrameBuf)
+    fn test_4a_inner<T>(&mut self, fb: &Framebuffer)
     where
         T: PrimInt,
         T: AsPrimitive<u32>,
+        T: Pod,
         u32: AsPrimitive<T>,
     {
         if fb.data.is_null() {
             return;
         }
 
-        let pitch = fb.pitch as usize / Pixel::size(fb.format);
-        let size = fb.height as usize * pitch;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data as *mut T, size) };
+        let data = unsafe { fb.as_slice_mut() };
+        let data: &mut [T] = bytemuck::cast_slice_mut(data);
+        let pitch = fb.pitch / fb.format.bit_per_pixel();
 
         if self.inp_state[0].bits() != self.state.test4a[27 * 3 + 1]
             || self.inp_state[1].bits() != self.state.test4a[27 * 3 + 2]
@@ -848,9 +832,9 @@ impl Core for AdvancedTestCore {
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
         match ctx.get_variable("test_advanced_pixel_format") {
-            Some("0RGB1555") => self.pixel_format = retro_pixel_format::RETRO_PIXEL_FORMAT_0RGB1555,
-            Some("XRGB8888") => self.pixel_format = retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888,
-            Some("RGB565") => self.pixel_format = retro_pixel_format::RETRO_PIXEL_FORMAT_RGB565,
+            Some("0RGB1555") => self.pixel_format = PixelFormat::XRGB1555,
+            Some("XRGB8888") => self.pixel_format = PixelFormat::XRGB8888,
+            Some("RGB565") => self.pixel_format = PixelFormat::RGB565,
             _ => (),
         }
     }
@@ -879,28 +863,15 @@ impl Core for AdvancedTestCore {
     #[inline]
     fn on_run(&mut self, ctx: &mut RunContext, _delta_us: Option<i64>) {
         // try to get a software framebuffer from the frontend
-        let fb = unsafe { ctx.get_current_framebuffer(WIDTH, HEIGHT, MemoryAccess::WRITE) };
-        let fb = match fb {
-            Ok(fb) if !fb.data.is_null() => FrameBuf {
-                data: fb.data,
-                phantom: PhantomData,
-
-                width: fb.width,
-                height: fb.height,
-                pitch: fb.pitch as u64,
-                format: fb.format,
-            },
-            // use our own fallback buffer instead
-            _ => FrameBuf {
-                data: self.framebuffer.as_mut_ptr(),
-                phantom: PhantomData,
-
-                width: WIDTH,
-                height: HEIGHT,
-                pitch: WIDTH as u64 * 4,
-                format: self.active_pixel_format,
-            },
+        let fb = unsafe {
+            ctx.get_current_framebuffer_or_fallback(
+                WIDTH,
+                HEIGHT,
+                MemoryAccess::WRITE,
+                self.active_pixel_format,
+            )
         };
+        let data = unsafe { fb.as_slice_mut() };
 
         self.inp_state[0] = ctx.get_joypad_state(0, 0);
         self.inp_state[1] = ctx.get_joypad_state(1, 0);
@@ -986,9 +957,9 @@ impl Core for AdvancedTestCore {
         self.render_outlined_text(&fb, (0, 0, 0), (255, 255, 255), &test_id, 8, 8);
 
         let text = match fb.format {
-            retro_pixel_format::RETRO_PIXEL_FORMAT_0RGB1555 => "0RGB1555",
-            retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888 => "XRGB8888",
-            retro_pixel_format::RETRO_PIXEL_FORMAT_RGB565 => "RGB565",
+            PixelFormat::XRGB1555 => "0RGB1555",
+            PixelFormat::XRGB8888 => "XRGB8888",
+            PixelFormat::RGB565 => "RGB565",
             _ => "Unknown",
         };
         self.render_outlined_text(
@@ -1014,9 +985,10 @@ impl Core for AdvancedTestCore {
 
         self.state.frame = self.state.frame.wrapping_add(1);
 
-        let size = fb.height as usize * fb.pitch as usize;
-        let data = unsafe { std::slice::from_raw_parts_mut(fb.data, size) };
-        ctx.draw_frame(data, fb.width, fb.height, fb.pitch);
+        let width = fb.width;
+        let height = fb.height;
+        let pitch = fb.pitch as u64;
+        ctx.draw_frame(data, width, height, pitch);
     }
 
     fn on_write_audio(&mut self, ctx: &mut AudioContext) {

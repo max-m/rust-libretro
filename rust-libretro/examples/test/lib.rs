@@ -117,8 +117,6 @@ struct TestCore {
     old_strength_strong: [u16; PORTS],
     old_select: [bool; PORTS],
     old_strength_weak: [u16; PORTS],
-
-    framebuffer: Vec<u8>,
 }
 
 retro_core!(TestCore {
@@ -142,8 +140,6 @@ retro_core!(TestCore {
     old_strength_strong: [0; PORTS],
     old_select: [false; PORTS],
     old_strength_weak: [0; PORTS],
-
-    framebuffer: vec![0; WIDTH as usize * HEIGHT as usize * 4],
 });
 
 impl TestCore {
@@ -420,40 +416,16 @@ impl TestCore {
     }
 
     fn render(&mut self, ctx: &mut RunContext) {
-        struct FrameBuf<'a> {
-            data: &'a mut [u8],
-
-            width: u32,
-            height: u32,
-            pitch: u64,
-        }
-
         // try to get a software framebuffer from the frontend
-        let fb = unsafe { ctx.get_current_framebuffer(WIDTH, HEIGHT, MemoryAccess::WRITE) };
-        let fb = match fb {
-            Ok(fb)
-                if fb.format == retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888
-                    && !fb.data.is_null() =>
-            {
-                let size = fb.height as usize * fb.pitch as usize;
-                let data = unsafe { std::slice::from_raw_parts_mut(fb.data, size) };
-                FrameBuf {
-                    data,
-
-                    width: fb.width,
-                    height: fb.height,
-                    pitch: fb.pitch as u64,
-                }
-            }
-            // use our own fallback buffer instead
-            _ => FrameBuf {
-                data: self.framebuffer.as_mut(),
-
-                width: WIDTH,
-                height: HEIGHT,
-                pitch: WIDTH as u64 * 4,
-            },
+        let fb = unsafe {
+            ctx.get_current_framebuffer_or_fallback(
+                WIDTH,
+                HEIGHT,
+                MemoryAccess::WRITE,
+                PixelFormat::XRGB8888,
+            )
         };
+        let data = unsafe { fb.as_slice_mut() };
 
         for y in 0..HEIGHT {
             let y_index = ((y as i32 - self.y_coord as i32) >> 4) & 1;
@@ -461,36 +433,39 @@ impl TestCore {
             for x in 0..WIDTH {
                 let x_index = ((x as i32 - self.x_coord as i32) >> 4) & 1;
 
-                let index = ((y as u64 * fb.pitch) + x as u64 * 4) as usize;
+                let index = (y as usize * fb.pitch) + x as usize * 4;
 
                 if y_index ^ x_index > 0 {
-                    fb.data[index] = 0;
-                    fb.data[index + 1] = 0;
-                    fb.data[index + 2] = 0;
+                    data[index] = 0;
+                    data[index + 1] = 0;
+                    data[index + 2] = 0;
                 } else {
-                    fb.data[index] = 0xFF;
-                    fb.data[index + 1] = 0xFF;
-                    fb.data[index + 2] = 0xFF;
+                    data[index] = 0xFF;
+                    data[index + 1] = 0xFF;
+                    data[index + 2] = 0xFF;
                 };
-                fb.data[index + 3] = 0xFF;
+                data[index + 3] = 0xFF;
             }
         }
 
         for y in self.mouse_rel_y - 5..self.mouse_rel_y + 5 {
             for x in self.mouse_rel_x - 5..self.mouse_rel_x + 5 {
                 let index = y as isize * fb.pitch as isize + x as isize * 4;
-                if index < 0 || index as usize >= fb.data.len() {
+                if index < 0 || index as usize >= data.len() {
                     continue;
                 }
 
-                fb.data[index as usize] = 0x00;
-                fb.data[index as usize + 1] = 0x00;
-                fb.data[index as usize + 2] = 0xFF;
-                fb.data[index as usize + 3] = 0xFF;
+                data[index as usize] = 0x00;
+                data[index as usize + 1] = 0x00;
+                data[index as usize + 2] = 0xFF;
+                data[index as usize + 3] = 0xFF;
             }
         }
 
-        ctx.draw_frame(fb.data, fb.width, fb.height, fb.pitch);
+        let width = fb.width;
+        let height = fb.height;
+        let pitch = fb.pitch as u64;
+        ctx.draw_frame(data, width, height, pitch);
     }
 
     fn set_sub_system_info(&self, ctx: &mut SetEnvironmentContext) {
@@ -677,7 +652,7 @@ impl Core for TestCore {
         _info: Option<retro_game_info>,
         ctx: &mut LoadGameContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if !ctx.set_pixel_format(retro_pixel_format::RETRO_PIXEL_FORMAT_XRGB8888) {
+        if !ctx.set_pixel_format(PixelFormat::XRGB8888) {
             return Err("XRGB8888 is not supported".into());
         }
 
