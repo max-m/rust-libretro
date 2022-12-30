@@ -7,6 +7,8 @@
 
 use ash::vk::*;
 
+pub type PFN_vkGetInstanceProcAddr = ash::vk::PFN_vkGetInstanceProcAddr;
+pub type PFN_vkGetDeviceProcAddr = ash::vk::PFN_vkGetDeviceProcAddr;
 pub type VkApplicationInfo = ApplicationInfo;
 pub type VkCommandBuffer = CommandBuffer;
 pub type VkDevice = Device;

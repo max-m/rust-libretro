@@ -39,6 +39,7 @@ fn main() {
         .allowlist_function("(retro|RETRO)_.*")
         .allowlist_var("(retro|RETRO)_.*")
         .blocklist_type("Vk.*")
+        .blocklist_type("PFN_vk.*")
         .prepend_enum_name(false)
         .impl_debug(true)
         .clang_arg("-fparse-all-comments")
