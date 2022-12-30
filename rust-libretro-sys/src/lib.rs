@@ -1,5 +1,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/max-m/rust-libretro/master/media/logo.png",
     html_favicon_url = "https://raw.githubusercontent.com/max-m/rust-libretro/master/media/favicon.png"
@@ -7,6 +8,12 @@
 
 use core::fmt::Display;
 use rust_libretro_sys_proc::TryFromPrimitive;
+
+#[cfg(feature = "vulkan")]
+pub mod vulkan;
+
+#[cfg(feature = "vulkan")]
+use vulkan::*;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 

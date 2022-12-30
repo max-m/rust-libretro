@@ -12,9 +12,13 @@ documentation = "https://docs.rs/rust-libretro-sys/"
 homepage = "https://github.com/max-m/rust-libretro/"
 repository = "https://github.com/max-m/rust-libretro/"
 
+[features]
+vulkan = ["dep:ash"]
+
 [dependencies]
 libc = "0.2.139"
 rust-libretro-sys-proc = { version = "0.2.3", path = "rust-libretro-sys-proc" }
+ash = { version = "0.37.1", optional = true }
 
 [build-dependencies]
 bindgen = "0.63.0"

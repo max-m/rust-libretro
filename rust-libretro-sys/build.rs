@@ -26,6 +26,8 @@ impl bindgen::callbacks::ParseCallbacks for ParseCallbacks {
     fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
         match info.name {
             "retro_savestate_context" => vec!["TryFromPrimitive".to_owned()],
+            // Other structs get these #[derive]s, but retro_hw_render_interface_vulkan doesn't for some reason
+            "retro_hw_render_interface_vulkan" => vec!["Copy".to_owned(), "Clone".to_owned()],
             _ => Vec::with_capacity(0),
         }
     }
@@ -38,11 +40,14 @@ fn main() {
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
     // the resulting bindings.
-    let bindings = bindgen::Builder::default()
+    let mut builder = bindgen::Builder::default()
         .header("wrapper.h")
+        .clang_arg("-I.")
         .allowlist_type("(retro|RETRO)_.*")
         .allowlist_function("(retro|RETRO)_.*")
         .allowlist_var("(retro|RETRO)_.*")
+        .blocklist_type("Vk.*")
+        .blocklist_type("PFN_vk.*")
         .prepend_enum_name(false)
         .impl_debug(true)
         .clang_arg("-fparse-all-comments")
@@ -54,9 +59,15 @@ fn main() {
         .bitfield_enum("retro_mod")
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
-        .parse_callbacks(Box::new(ParseCallbacks))
-        .generate()
-        .expect("Unable to generate bindings");
+        .parse_callbacks(Box::new(ParseCallbacks));
+
+    builder = if env::var("CARGO_FEATURE_VULKAN").is_ok() {
+        builder.clang_arg("-DCARGO_FEATURE_VULKAN")
+    } else {
+        builder
+    };
+
+    let bindings = builder.generate().expect("Unable to generate bindings");
 
     // Write the bindings to the $OUT_DIR/bindings.rs file.
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
