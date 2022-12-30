@@ -286,6 +286,11 @@ enum retro_language
    RETRO_LANGUAGE_INDONESIAN          = 24,
    RETRO_LANGUAGE_SWEDISH             = 25,
    RETRO_LANGUAGE_UKRAINIAN           = 26,
+   RETRO_LANGUAGE_CZECH               = 27,
+   RETRO_LANGUAGE_CATALAN_VALENCIA    = 28,
+   RETRO_LANGUAGE_CATALAN             = 29,
+   RETRO_LANGUAGE_BRITISH_ENGLISH     = 30,
+   RETRO_LANGUAGE_HUNGARIAN           = 31,
    RETRO_LANGUAGE_LAST,
 
    /* Ensure sizeof(enum) == sizeof(int) */
@@ -1192,7 +1197,7 @@ enum retro_mod
                                             *     "foo_option",
                                             *     "Speed hack coprocessor X",
                                             *     "Provides increased performance at the expense of reduced accuracy",
-                                            *     {
+                                            * 	  {
                                             *         { "false",    NULL },
                                             *         { "true",     NULL },
                                             *         { "unstable", "Turbo (Unstable)" },
@@ -1635,7 +1640,7 @@ enum retro_mod
                                             *     "Provides increased performance at the expense of reduced accuracy.",
                                             *     NULL,
                                             *     NULL,
-                                            *     {
+                                            * 	  {
                                             *         { "false",    NULL },
                                             *         { "true",     NULL },
                                             *         { "unstable", "Turbo (Unstable)" },
@@ -1653,7 +1658,7 @@ enum retro_mod
                                             *     "Setting 'Advanced > Speed hack coprocessor X' to 'true' or 'Turbo' provides increased performance at the expense of reduced accuracy",
                                             *     "Setting 'Speed hack coprocessor X' to 'true' or 'Turbo' provides increased performance at the expense of reduced accuracy",
                                             *     "advanced_settings",
-                                            *     {
+                                            * 	  {
                                             *         { "false",    NULL },
                                             *         { "true",     NULL },
                                             *         { "unstable", "Turbo (Unstable)" },
@@ -1754,6 +1759,12 @@ enum retro_mod
                                            /* struct retro_throttle_state * --
                                             * Allows an implementation to get details on the actual rate
                                             * the frontend is attempting to call retro_run().
+                                            */
+
+#define RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT (72 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+                                           /* int * --
+                                            * Tells the core about the context the frontend is asking for savestate.
+                                            * (see enum retro_savestate_context)
                                             */
 
 /* VFS functionality */
@@ -1892,17 +1903,17 @@ typedef int (RETRO_CALLCONV *retro_vfs_closedir_t)(struct retro_vfs_dir_handle *
 struct retro_vfs_interface
 {
    /* VFS API v1 */
-   retro_vfs_get_path_t get_path;
-   retro_vfs_open_t open;
-   retro_vfs_close_t close;
-   retro_vfs_size_t size;
-   retro_vfs_tell_t tell;
-   retro_vfs_seek_t seek;
-   retro_vfs_read_t read;
-   retro_vfs_write_t write;
-   retro_vfs_flush_t flush;
-   retro_vfs_remove_t remove;
-   retro_vfs_rename_t rename;
+	retro_vfs_get_path_t get_path;
+	retro_vfs_open_t open;
+	retro_vfs_close_t close;
+	retro_vfs_size_t size;
+	retro_vfs_tell_t tell;
+	retro_vfs_seek_t seek;
+	retro_vfs_read_t read;
+	retro_vfs_write_t write;
+	retro_vfs_flush_t flush;
+	retro_vfs_remove_t remove;
+	retro_vfs_rename_t rename;
    /* VFS API v2 */
    retro_vfs_truncate_t truncate;
    /* VFS API v3 */
@@ -1930,11 +1941,11 @@ struct retro_vfs_interface_info
 
 enum retro_hw_render_interface_type
 {
-   RETRO_HW_RENDER_INTERFACE_VULKAN = 0,
-   RETRO_HW_RENDER_INTERFACE_D3D9   = 1,
-   RETRO_HW_RENDER_INTERFACE_D3D10  = 2,
-   RETRO_HW_RENDER_INTERFACE_D3D11  = 3,
-   RETRO_HW_RENDER_INTERFACE_D3D12  = 4,
+	RETRO_HW_RENDER_INTERFACE_VULKAN = 0,
+	RETRO_HW_RENDER_INTERFACE_D3D9   = 1,
+	RETRO_HW_RENDER_INTERFACE_D3D10  = 2,
+	RETRO_HW_RENDER_INTERFACE_D3D11  = 3,
+	RETRO_HW_RENDER_INTERFACE_D3D12  = 4,
    RETRO_HW_RENDER_INTERFACE_GSKIT_PS2  = 5,
    RETRO_HW_RENDER_INTERFACE_DUMMY  = INT_MAX
 };
@@ -2991,6 +3002,35 @@ enum retro_pixel_format
 
    /* Ensure sizeof() == sizeof(int). */
    RETRO_PIXEL_FORMAT_UNKNOWN  = INT_MAX
+};
+
+enum retro_savestate_context
+{
+   /* Standard savestate written to disk. */
+   RETRO_SAVESTATE_CONTEXT_NORMAL                 = 0,
+
+   /* Savestate where you are guaranteed that the same instance will load the save state.
+    * You can store internal pointers to code or data.
+    * It's still a full serialization and deserialization, and could be loaded or saved at any time.
+    * It won't be written to disk or sent over the network.
+    */
+   RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE = 1,
+
+   /* Savestate where you are guaranteed that the same emulator binary will load that savestate.
+    * You can skip anything that would slow down saving or loading state but you can not store internal pointers.
+    * It won't be written to disk or sent over the network.
+    * Example: "Second Instance" runahead
+    */
+   RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_BINARY   = 2,
+
+   /* Savestate used within a rollback netplay feature.
+    * You should skip anything that would unnecessarily increase bandwidth usage.
+    * It won't be written to disk but it will be sent over the network.
+    */
+   RETRO_SAVESTATE_CONTEXT_ROLLBACK_NETPLAY       = 3,
+
+   /* Ensure sizeof() == sizeof(int). */
+   RETRO_SAVESTATE_CONTEXT_UNKNOWN                = INT_MAX
 };
 
 struct retro_message
