@@ -12,7 +12,11 @@ documentation = "https://docs.rs/rust-libretro-sys/"
 homepage = "https://github.com/max-m/rust-libretro/"
 repository = "https://github.com/max-m/rust-libretro/"
 
+[features]
+vulkan = ["dep:ash"]
+
 [dependencies]
+ash = { version = "0.37.1+1.3.235", optional = true }
 libc = "0.2.119"
 
 [build-dependencies]
