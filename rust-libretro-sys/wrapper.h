@@ -1,1 +1,1 @@
-#include "libretro-311fec1.h"
+#include "libretro.h" // commit 311fec1
