@@ -1,0 +1,21 @@
+[package]
+name = "rust-libretro-sys-proc"
+version = "0.1.9"
+edition = "2021"
+authors = [ "Maximilian Mader" ]
+description = "Procedural macros for rust-libretro-sys"
+keywords = [ "libretro", "RetroArch", "emulator", "game" ]
+categories = [ "emulators", "game-development", "gui" ]
+readme = "README.md"
+license = "MIT"
+documentation = "https://docs.rs/rust-libretro-proc-sys/"
+homepage = "https://github.com/max-m/rust-libretro/"
+repository = "https://github.com/max-m/rust-libretro/"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.36"
+quote = "1.0.15"
+syn = { version = "1.0.86", features = [ "extra-traits", "full", "parsing" ] }

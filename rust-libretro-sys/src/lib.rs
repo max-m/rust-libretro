@@ -5,6 +5,9 @@
     html_favicon_url = "https://raw.githubusercontent.com/max-m/rust-libretro/master/media/favicon.png"
 )]
 
+use core::fmt::Display;
+use rust_libretro_sys_proc::TryFromPrimitive;
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 /// #define RETRO_DEVICE_SUBCLASS(base, id) (((id + 1) << RETRO_DEVICE_TYPE_SHIFT) | base)
@@ -32,3 +35,18 @@ pub const RETRO_DEVICE_ID_LIGHTGUN_PAUSE: u32 = 5;
 /// For some reason bindgen did not export this #define
 pub const RETRO_HW_FRAME_BUFFER_VALID: *mut std::os::raw::c_void =
     -1_i32 as *mut std::os::raw::c_void;
+
+#[derive(Debug, Default)]
+pub struct InvalidEnumValue<T: Display>(T);
+
+impl<T: Display> InvalidEnumValue<T> {
+    pub fn new(value: T) -> Self {
+        InvalidEnumValue(value)
+    }
+}
+
+impl<T: Display> Display for InvalidEnumValue<T> {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+        writeln!(fmt, "Invalid enum value: {}", self.0)
+    }
+}

@@ -22,6 +22,13 @@ impl bindgen::callbacks::ParseCallbacks for ParseCallbacks {
     fn include_file(&self, filename: &str) {
         println!("cargo:rerun-if-changed={}", filename);
     }
+
+    fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
+        match info.name {
+            "retro_savestate_context" => vec!["TryFromPrimitive".to_owned()],
+            _ => Vec::with_capacity(0),
+        }
+    }
 }
 
 fn main() {
