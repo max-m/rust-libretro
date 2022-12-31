@@ -1,6 +1,6 @@
 [package]
 name = "rust-libretro"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 authors = [ "Maximilian Mader" ]
 description = "libretro API abstractions"
@@ -21,8 +21,8 @@ rustdoc-args = [ "--document-private-items" ]
 unstable-env-commands = []
 
 [dependencies]
-rust-libretro-sys = { version = "0.1.7", path = "../rust-libretro-sys" }
-rust-libretro-proc = { version = "0.1.7", path = "rust-libretro-proc" }
+rust-libretro-sys = { version = "0.1.8", path = "../rust-libretro-sys" }
+rust-libretro-proc = { version = "0.1.8", path = "rust-libretro-proc" }
 
 cfg-if = "1.0.0"
 bitflags = "1.3.2"
