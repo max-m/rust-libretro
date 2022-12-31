@@ -987,7 +987,7 @@ impl Core for AdvancedTestCore {
 
         let width = fb.width;
         let height = fb.height;
-        let pitch = fb.pitch as u64;
+        let pitch = fb.pitch;
         ctx.draw_frame(data, width, height, pitch);
     }
 
@@ -1007,8 +1007,8 @@ impl Core for AdvancedTestCore {
         ctx.batch_audio_samples(&samples);
     }
 
-    fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> size_t {
-        std::mem::size_of::<State>() as u64
+    fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> usize {
+        std::mem::size_of::<State>()
     }
 
     fn on_serialize(&mut self, slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {

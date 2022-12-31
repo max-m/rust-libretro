@@ -1124,7 +1124,7 @@ impl AudioContext<'_> {
     /// Only one of the audio callbacks must ever be used.
     pub fn batch_audio_samples(&self, samples: &[i16]) {
         if let Some(callback) = self.audio_sample_batch_callback {
-            let len = samples.len() as u64;
+            let len = samples.len();
 
             unsafe {
                 (callback)(samples.as_ptr(), len / 2);
@@ -1165,7 +1165,7 @@ pub struct RunContext<'a> {
     pub(crate) had_frame: &'a mut bool,
     pub(crate) last_width: &'a mut u32,
     pub(crate) last_height: &'a mut u32,
-    pub(crate) last_pitch: &'a mut u64,
+    pub(crate) last_pitch: &'a mut usize,
 
     pub(crate) supports_bitmasks: bool,
 }
@@ -1184,7 +1184,7 @@ impl<'a> From<&mut RunContext<'a>> for AudioContext<'a> {
     }
 }
 
-impl<'a> RunContext<'_> {
+impl RunContext<'_> {
     #[inline(always)]
     pub fn can_dupe(&self) -> bool {
         self.can_dupe
@@ -1352,12 +1352,12 @@ impl<'a> RunContext<'_> {
                 // Thus we cannot pass the `FrameBuffer` to `Self::draw_frame` for example.
                 return Ok(Framebuffer {
                     data: fb.data as *mut u8,
-                    data_len: fb.height as usize * fb.pitch as usize,
+                    data_len: fb.height as usize * fb.pitch,
                     phantom: ::core::marker::PhantomData,
 
                     width: fb.width,
                     height: fb.height,
-                    pitch: fb.pitch as usize,
+                    pitch: fb.pitch,
                     format: fb.format.into(),
                     access_flags: MemoryAccess::from_bits_unchecked(fb.access_flags),
                     memory_flags: MemoryType::from_bits_unchecked(fb.memory_flags),
@@ -1405,7 +1405,7 @@ impl<'a> RunContext<'_> {
     }
 
     /// Draws a new frame if [`RunContext::video_refresh_callback`] has been set
-    pub fn draw_frame(&mut self, data: &[u8], width: u32, height: u32, pitch: u64) {
+    pub fn draw_frame(&mut self, data: &[u8], width: u32, height: u32, pitch: usize) {
         if let Some(callback) = self.video_refresh_callback {
             *self.had_frame = true;
             *self.last_width = width;
@@ -1456,7 +1456,7 @@ impl<'a> RunContext<'_> {
         }
     }
 
-    pub fn draw_hardware_frame(&mut self, width: u32, height: u32, pitch: u64) {
+    pub fn draw_hardware_frame(&mut self, width: u32, height: u32, pitch: usize) {
         if let Some(callback) = self.video_refresh_callback {
             *self.had_frame = true;
             *self.last_width = width;

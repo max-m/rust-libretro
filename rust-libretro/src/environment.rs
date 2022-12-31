@@ -1892,3 +1892,21 @@ pub unsafe fn get_throttle_state(callback: retro_environment_t) -> Option<retro_
     // struct retro_throttle_state *
     get_unchecked(callback, RETRO_ENVIRONMENT_GET_THROTTLE_STATE).map(|(v, _)| v)
 }
+
+/// Tells the core about the context the frontend is asking for savestate.
+//  See [`retro_savestate_context`]
+#[proc::context(GenericContext)]
+#[proc::unstable(feature = "env-commands")]
+pub unsafe fn get_savestate_context(
+    callback: retro_environment_t,
+) -> Option<retro_savestate_context> {
+    // int *
+
+    if let Some((value, _)) =
+        get::<retro_savestate_context_REPR_TYPE>(callback, RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT)
+    {
+        return retro_savestate_context::try_from(value).ok();
+    }
+
+    None
+}

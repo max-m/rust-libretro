@@ -216,7 +216,7 @@ forward!(
     #[doc = "See also [`rust_libretro_sys::retro_serialize_size`]."],
     wrapper,
     retro_serialize_size,
-    get_serialize_size -> size_t,
+    get_serialize_size -> usize,
     GenericContext::new(&wrapper.environment_callback, Arc::clone(&wrapper.interfaces))
 );
 forward!(
@@ -507,7 +507,7 @@ pub unsafe extern "C" fn retro_run() {
 ///
 /// This could also be used by a frontend to implement rewind.
 #[no_mangle]
-pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: size_t) -> bool {
+pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: usize) -> bool {
     #[cfg(feature = "log")]
     log::trace!("retro_serialize(data = {data:#?}, size = {size})");
 
@@ -525,7 +525,7 @@ pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: 
         );
 
         // Convert the given buffer into a proper slice
-        let slice = std::slice::from_raw_parts_mut(data as *mut u8, size as usize);
+        let slice = std::slice::from_raw_parts_mut(data as *mut u8, size);
 
         return wrapper.core.on_serialize(slice, &mut ctx);
     }
@@ -538,10 +538,7 @@ pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: 
 ///
 /// This could also be used by a frontend to implement rewind.
 #[no_mangle]
-pub unsafe extern "C" fn retro_unserialize(
-    data: *const std::os::raw::c_void,
-    size: size_t,
-) -> bool {
+pub unsafe extern "C" fn retro_unserialize(data: *const std::os::raw::c_void, size: usize) -> bool {
     #[cfg(feature = "log")]
     log::trace!("retro_unserialize(data = {data:#?}, size = {size})");
 
@@ -559,7 +556,7 @@ pub unsafe extern "C" fn retro_unserialize(
         );
 
         // Convert the given buffer into a proper slice
-        let slice = std::slice::from_raw_parts_mut(data as *mut u8, size as usize);
+        let slice = std::slice::from_raw_parts_mut(data as *mut u8, size);
 
         return wrapper.core.on_unserialize(slice, &mut ctx);
     }
@@ -658,7 +655,7 @@ pub unsafe extern "C" fn retro_load_game(game: *const retro_game_info) -> bool {
 pub unsafe extern "C" fn retro_load_game_special(
     game_type: std::os::raw::c_uint,
     info: *const retro_game_info,
-    num_info: size_t,
+    num_info: usize,
 ) -> bool {
     #[cfg(feature = "log")]
     log::trace!(
@@ -736,7 +733,7 @@ pub unsafe extern "C" fn retro_get_memory_data(
 ///
 /// `id` is one of the `RETRO_MEMORY_*` constants.
 #[no_mangle]
-pub unsafe extern "C" fn retro_get_memory_size(id: std::os::raw::c_uint) -> size_t {
+pub unsafe extern "C" fn retro_get_memory_size(id: std::os::raw::c_uint) -> usize {
     #[cfg(feature = "log")]
     log::trace!("retro_get_memory_size(id = {id})");
 
@@ -936,7 +933,7 @@ pub unsafe extern "C" fn retro_set_initial_image_callback(
 pub unsafe extern "C" fn retro_get_image_path_callback(
     index: ::std::os::raw::c_uint,
     path: *mut ::std::os::raw::c_char,
-    len: size_t,
+    len: usize,
 ) -> bool {
     #[cfg(feature = "log")]
     log::trace!("retro_get_image_path_callback(index = {index}, path = {path:#?}, len = {len})");
@@ -945,7 +942,7 @@ pub unsafe extern "C" fn retro_get_image_path_callback(
         match wrapper.core.on_get_image_path(index) {
             Some(image_path) => {
                 let image_path = image_path.as_bytes();
-                let buf = std::slice::from_raw_parts_mut(path as *mut u8, len as usize);
+                let buf = std::slice::from_raw_parts_mut(path as *mut u8, len);
                 let len = image_path.len().min(buf.len());
 
                 buf[..len].copy_from_slice(&image_path[..len]);
@@ -963,7 +960,7 @@ pub unsafe extern "C" fn retro_get_image_path_callback(
 pub unsafe extern "C" fn retro_get_image_label_callback(
     index: ::std::os::raw::c_uint,
     label: *mut ::std::os::raw::c_char,
-    len: size_t,
+    len: usize,
 ) -> bool {
     #[cfg(feature = "log")]
     log::trace!("retro_get_image_label_callback(index = {index}, label = {label:#?}, len = {len})");
@@ -972,7 +969,7 @@ pub unsafe extern "C" fn retro_get_image_label_callback(
         match wrapper.core.on_get_image_label(index) {
             Some(image_label) => {
                 let image_label = image_label.as_bytes();
-                let buf = std::slice::from_raw_parts_mut(label as *mut u8, len as usize);
+                let buf = std::slice::from_raw_parts_mut(label as *mut u8, len);
                 let len = image_label.len().min(buf.len());
 
                 buf[..len].copy_from_slice(&image_label[..len]);
@@ -1050,9 +1047,9 @@ pub unsafe extern "C" fn retro_camera_frame_raw_framebuffer_callback(
     buffer: *const u32,
     width: ::std::os::raw::c_uint,
     height: ::std::os::raw::c_uint,
-    pitch: size_t,
+    pitch: usize,
 ) {
-    let buffer_size = height as usize * pitch as usize;
+    let buffer_size = height as usize * pitch;
     let buffer = std::slice::from_raw_parts(buffer, buffer_size);
 
     #[cfg(feature = "log")]
@@ -1061,7 +1058,7 @@ pub unsafe extern "C" fn retro_camera_frame_raw_framebuffer_callback(
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         return wrapper
             .core
-            .on_camera_raw_framebuffer(buffer, width, height, pitch as usize);
+            .on_camera_raw_framebuffer(buffer, width, height, pitch);
     }
 
     panic!("retro_camera_frame_raw_framebuffer_callback: Core has not been initialized yet!");

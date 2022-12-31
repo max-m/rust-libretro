@@ -73,7 +73,7 @@ pub trait Core: CoreOptions {
     /// Between calls to [`Core::on_load_game`] and [`Core::on_unload_game`], the
     /// returned size is never allowed to be larger than a previous returned
     /// value, to ensure that the frontend can allocate a save state buffer once.
-    fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> size_t {
+    fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> usize {
         // Tell the frontend that we don’t support serialization
         0
     }
@@ -111,7 +111,7 @@ pub trait Core: CoreOptions {
         &mut self,
         _game_type: std::os::raw::c_uint,
         _info: *const retro_game_info,
-        _num_info: size_t,
+        _num_info: usize,
         _ctx: &mut LoadGameSpecialContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         Err("on_load_game_special is not implemented".into())
@@ -163,7 +163,7 @@ pub trait Core: CoreOptions {
         &mut self,
         _id: std::os::raw::c_uint,
         _ctx: &mut GetMemorySizeContext,
-    ) -> size_t {
+    ) -> usize {
         // Tell the frontend that we don’t support direct memory access
         0
     }

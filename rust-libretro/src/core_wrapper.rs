@@ -75,7 +75,7 @@ pub(crate) struct CoreWrapper {
     pub(crate) had_frame: bool,
     pub(crate) last_width: u32,
     pub(crate) last_height: u32,
-    pub(crate) last_pitch: u64,
+    pub(crate) last_pitch: usize,
 
     pub(crate) supports_bitmasks: bool,
 

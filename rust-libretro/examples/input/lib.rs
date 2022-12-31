@@ -171,7 +171,7 @@ impl Core for InputTestCore {
 
         let width = fb.width;
         let height = fb.height;
-        let pitch = fb.pitch as u64;
+        let pitch = fb.pitch;
         ctx.draw_frame(data, width, height, pitch);
     }
 }

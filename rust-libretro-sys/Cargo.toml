@@ -1,6 +1,6 @@
 [package]
 name = "rust-libretro-sys"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
 authors = [ "Maximilian Mader" ]
 description = "libretro API bindings generated via bindgen"
@@ -14,7 +14,7 @@ repository = "https://github.com/max-m/rust-libretro/"
 
 [dependencies]
 libc = "0.2.119"
-rust-libretro-sys-proc = { version = "0.1.9", path = "rust-libretro-sys-proc" }
+rust-libretro-sys-proc = { version = "0.2.0", path = "rust-libretro-sys-proc" }
 
 [build-dependencies]
 bindgen = "0.63.0"
