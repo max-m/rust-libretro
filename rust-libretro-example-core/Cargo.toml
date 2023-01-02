@@ -1,6 +1,6 @@
 [package]
 name = "rust-libretro-example-core"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = [ "Maximilian Mader" ]
 description = "libretro example core"
@@ -20,7 +20,7 @@ libc = "0.2.139"
 log = "0.4.17"
 
 [dependencies.rust-libretro]
-version = "0.2.2"
+version = "0.2.3"
 path = "../rust-libretro"
 features = [ "log", "unstable-env-commands" ]
 
