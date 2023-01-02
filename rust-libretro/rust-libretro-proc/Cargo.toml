@@ -17,6 +17,6 @@ proc-macro = true
 
 [dependencies]
 rust-libretro-sys = { version = "0.2.2", path = "../../rust-libretro-sys" }
-proc-macro2 = "1.0.36"
-quote = "1.0.15"
-syn = { version = "1.0.86", features = [ "extra-traits", "full", "parsing" ] }
+proc-macro2 = "1.0.49"
+quote = "1.0.23"
+syn = { version = "1.0.107", features = [ "extra-traits", "full", "parsing" ] }

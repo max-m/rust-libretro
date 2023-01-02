@@ -16,8 +16,8 @@ repository = "https://github.com/max-m/rust-libretro/"
 crate-type = ["cdylib"]
 
 [dependencies]
-libc = "0.2.119"
-log = "0.4.14"
+libc = "0.2.139"
+log = "0.4.17"
 
 [dependencies.rust-libretro]
 version = "0.2.2"
@@ -25,4 +25,4 @@ path = "../rust-libretro"
 features = [ "log", "unstable-env-commands" ]
 
 [dev-dependencies]
-log = { version = "0.4.14", features = ["release_max_level_debug"] }
+log = { version = "0.4.17", features = ["release_max_level_debug"] }

@@ -13,7 +13,7 @@ homepage = "https://github.com/max-m/rust-libretro/"
 repository = "https://github.com/max-m/rust-libretro/"
 
 [dependencies]
-libc = "0.2.119"
+libc = "0.2.139"
 rust-libretro-sys-proc = { version = "0.2.2", path = "rust-libretro-sys-proc" }
 
 [build-dependencies]
