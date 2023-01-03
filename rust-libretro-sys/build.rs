@@ -25,7 +25,7 @@ impl bindgen::callbacks::ParseCallbacks for ParseCallbacks {
     }
 
     fn add_derives(&self, name: &str) -> Vec<String> {
-        // Other structs get these #[derive]s, but retro_hw_render_interface_vulkan for some reason
+        // Other structs get these #[derive]s, but retro_hw_render_interface_vulkan doesn't for some reason
         match name {
             "retro_hw_render_interface_vulkan" => vec!["Copy".into(), "Clone".into()],
             _ => vec![],
