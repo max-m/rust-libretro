@@ -21,20 +21,13 @@ impl bindgen::callbacks::ParseCallbacks for ParseCallbacks {
     /// generated bindings whenever any of the files included from the header change:
     fn include_file(&self, filename: &str) {
         println!("cargo:rerun-if-changed={}", filename);
-        println!("Including {filename}");
-    }
-
-    fn add_derives(&self, name: &str) -> Vec<String> {
-        // Other structs get these #[derive]s, but retro_hw_render_interface_vulkan doesn't for some reason
-        match name {
-            "retro_hw_render_interface_vulkan" => vec!["Copy".into(), "Clone".into()],
-            _ => vec![],
-        }
     }
 
     fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
         match info.name {
             "retro_savestate_context" => vec!["TryFromPrimitive".to_owned()],
+            "retro_hw_render_interface_vulkan" => vec!["Copy".to_owned(), "Clone".to_owned()],
+            // Other structs get these #[derive]s, but retro_hw_render_interface_vulkan doesn't for some reason
             _ => Vec::with_capacity(0),
         }
     }
