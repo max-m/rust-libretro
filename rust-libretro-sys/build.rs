@@ -31,6 +31,13 @@ impl bindgen::callbacks::ParseCallbacks for ParseCallbacks {
             _ => vec![],
         }
     }
+
+    fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
+        match info.name {
+            "retro_savestate_context" => vec!["TryFromPrimitive".to_owned()],
+            _ => Vec::with_capacity(0),
+        }
+    }
 }
 
 fn main() {

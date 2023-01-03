@@ -1,6 +1,6 @@
 [package]
 name = "rust-libretro-sys"
-version = "0.1.5"
+version = "0.2.3"
 edition = "2021"
 authors = [ "Maximilian Mader" ]
 description = "libretro API bindings generated via bindgen"
@@ -18,7 +18,8 @@ vulkan = ["dep:ash"]
 
 [dependencies]
 ash = { version = "0.37.1", optional = true }
-libc = "0.2.119"
+libc = "0.2.139"
+rust-libretro-sys-proc = { version = "0.2.3", path = "rust-libretro-sys-proc" }
 
 [build-dependencies]
-bindgen = "0.59.2"
+bindgen = "0.63.0"

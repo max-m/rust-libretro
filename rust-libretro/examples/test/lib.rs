@@ -467,7 +467,7 @@ impl TestCore {
 
         let width = fb.width;
         let height = fb.height;
-        let pitch = fb.pitch as u64;
+        let pitch = fb.pitch;
         ctx.draw_frame(data, width, height, pitch);
     }
 
@@ -645,7 +645,7 @@ impl Core for TestCore {
         &mut self,
         game_type: std::os::raw::c_uint,
         _info: *const retro_game_info,
-        num_info: size_t,
+        num_info: usize,
         ctx: &mut LoadGameSpecialContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         log::info!("Loading special content!");
@@ -864,8 +864,8 @@ impl Core for TestCore {
         log::info!("Keyboard:\n\tDown: {down}\n\tCode: {keycode:?}\n\tChar: {character}\n\tMod: {key_modifiers:?}");
     }
 
-    fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> size_t {
-        (std::mem::size_of_val(&self.x_coord) + std::mem::size_of_val(&self.y_coord)) as size_t
+    fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> usize {
+        std::mem::size_of_val(&self.x_coord) + std::mem::size_of_val(&self.y_coord)
     }
 
     fn on_serialize(&mut self, slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {

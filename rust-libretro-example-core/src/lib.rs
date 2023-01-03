@@ -167,7 +167,7 @@ impl Core for ExampleCore {
                 chunk.fill(color);
             }
 
-            ctx.draw_frame(self.pixels.as_ref(), width, height, width as u64 * 4);
+            ctx.draw_frame(self.pixels.as_ref(), width, height, width as usize * 4);
         } else if ctx.can_dupe() {
             ctx.dupe_frame();
         }

@@ -834,11 +834,8 @@ pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
     }
 
     // Remove the `context` attribute
-    fun.attrs = fun
-        .attrs
-        .into_iter()
-        .filter(|attr| attr.path.segments.last().unwrap().ident != "context")
-        .collect();
+    fun.attrs
+        .retain(|attr| attr.path.segments.last().unwrap().ident != "context");
 
     // Replace the function arguments
     fun.sig.inputs = inputs;
