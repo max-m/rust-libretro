@@ -13,7 +13,7 @@ homepage = "https://github.com/max-m/rust-libretro/"
 repository = "https://github.com/max-m/rust-libretro/"
 
 [package.metadata.docs.rs]
-features = [ "log", "unstable-env-commands" ]
+features = [ "log", "unstable-env-commands", "vulkan" ]
 # Make documentation of, for example, our private CoreWrapper available
 rustdoc-args = [ "--document-private-items" ]
 
