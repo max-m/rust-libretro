@@ -10,13 +10,9 @@ jobs:
     name: Release docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          default: true
-      - uses: Swatinem/rust-cache@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: cargo doc --all-features --document-private-items
       - name: Add docs to archive
         working-directory: target/doc
@@ -76,13 +72,11 @@ jobs:
             name: windows-amd64
             ext: dll
     steps:
-      - uses: actions/checkout@master
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          default: true
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - name: Set up Unix environment
         run: |

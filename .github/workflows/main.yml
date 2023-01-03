@@ -6,13 +6,10 @@ jobs:
     name: Check rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         components: rustfmt
-        toolchain: stable
-        default: true
     - run: cargo fmt -- --check
 
   clippy:
@@ -20,35 +17,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           components: clippy
-          toolchain: stable
-          default: true
-      - uses: actions-rs/clippy-check@v1
+      - uses: actions-rs-plus/clippy-check@main
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features
 
   docs:
     name: Generate docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          default: true
-      - uses: Swatinem/rust-cache@v1
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
       - run: cargo doc --all-features --document-private-items
       - name: Add docs to archive
         working-directory: target/doc
         run: |
           tar cvf ../../rust-libretro-docs.tar .
           gzip ../../rust-libretro-docs.tar
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: rust-libretro-docs
           path: rust-libretro-docs.tar.gz
@@ -97,13 +85,11 @@ jobs:
             name: windows-amd64
             ext: dll
     steps:
-      - uses: actions/checkout@master
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          default: true
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
       - name: Set LIBCLANG_PATH
         run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
         if: matrix.os == 'windows-latest'
@@ -141,7 +127,7 @@ jobs:
           tar cvf ../../rust-libretro-${{ matrix.name }}.tar --exclude='examples/*-????????????????.${{ matrix.ext }}' *.${{ matrix.ext }} examples/*.${{ matrix.ext }}
           gzip ../../rust-libretro-${{ matrix.name }}.tar
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: rust-libretro-${{ matrix.name }}
           path: rust-libretro-${{ matrix.name }}.tar.gz
