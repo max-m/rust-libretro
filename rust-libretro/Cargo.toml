@@ -25,7 +25,7 @@ vulkan = ["dep:ash"]
 rust-libretro-sys = { version = "0.1.5", path = "../rust-libretro-sys" }
 rust-libretro-proc = { version = "0.1.5", path = "rust-libretro-proc" }
 
-ash = { version = "0.37.1+1.3.235", optional = true }
+ash = { version = "0.37.1", optional = true }
 cfg-if = "1.0.0"
 bitflags = "1.3.2"
 doc_item = "0.2.5"
