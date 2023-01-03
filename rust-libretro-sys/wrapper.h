@@ -1,1 +1,2 @@
-#include "libretro-b89692c.h"
+// Revision: b89692c
+#include "libretro.h"
