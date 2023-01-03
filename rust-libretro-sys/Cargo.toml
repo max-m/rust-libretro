@@ -13,6 +13,7 @@ homepage = "https://github.com/max-m/rust-libretro/"
 repository = "https://github.com/max-m/rust-libretro/"
 
 [features]
+default = ["vulkan"]
 vulkan = ["dep:ash"]
 
 [dependencies]
