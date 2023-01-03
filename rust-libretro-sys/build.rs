@@ -61,8 +61,8 @@ fn main() {
         // included header files changed.
         .parse_callbacks(Box::new(ParseCallbacks));
 
-    builder = if cfg!(feature = "vulkan") {
-        builder.clang_arg("-DRUST_FEATURE_VULKAN")
+    builder = if env::var("CARGO_FEATURE_VULKAN").is_ok() {
+        builder.clang_arg("-DCARGO_FEATURE_VULKAN")
     }
     else {
         builder
