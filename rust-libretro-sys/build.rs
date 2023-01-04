@@ -40,8 +40,8 @@ fn main() {
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
     // the resulting bindings.
-    let mut builder = bindgen::Builder::default()
-        .header("wrapper.h")
+    let retro_bindings = bindgen::Builder::default()
+        .header("libretro.h")
         .clang_arg("-I.")
         .allowlist_type("(retro|RETRO)_.*")
         .allowlist_function("(retro|RETRO)_.*")
@@ -57,24 +57,47 @@ fn main() {
         })
         .newtype_enum("retro_key")
         .bitfield_enum("retro_mod")
+        .size_t_is_usize(true)
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
-        .parse_callbacks(Box::new(ParseCallbacks));
-
-    builder = if env::var("CARGO_FEATURE_VULKAN").is_ok() {
-        builder.clang_arg("-DCARGO_FEATURE_VULKAN")
-    }
-    else {
-        builder
-    };
-
-    let bindings = builder
+        .parse_callbacks(Box::new(ParseCallbacks))
         .generate()
-        .expect("Unable to generate bindings");
+        .expect("Unable to generate bindings for libretro.h");
+
+    // We generate two separate binding files to work around a bug in CLion's Rust plugin.
+    // CLion can't (as of this writing) detect bindgen'd types that are conditionally generated
+    // based on the set features.
+    // As a workaround we generate all bindings unconditionally
+    // but use #[cfg] in lib.rs to exclude irrelevant ones from the build.
+    let retro_vulkan_bindings = bindgen::Builder::default()
+        .header("libretro_vulkan.h")
+        .clang_arg("-I.")
+        .allowlist_type("retro.*vulkan")
+        .allowlist_var("RETRO_.+_VULKAN_VERSION")
+        .blocklist_type("^retro_hw_render.*type$")
+        .blocklist_type("Vk.*")
+        .blocklist_type("PFN_vk.*")
+        .prepend_enum_name(false)
+        .impl_debug(true)
+        .clang_arg("-fparse-all-comments")
+        .enable_function_attribute_detection()
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: true,
+        })
+        .size_t_is_usize(true)
+        // Tell cargo to invalidate the built crate whenever any of the
+        // included header files changed.
+        .parse_callbacks(Box::new(ParseCallbacks))
+        .generate()
+        .expect("Unable to generate bindings for libretro_vulkan.h");
 
     // Write the bindings to the $OUT_DIR/bindings.rs file.
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+    retro_bindings
+        .write_to_file(out_path.join("bindings_libretro.rs"))
+        .expect("Couldn't write bindings for libretro.h!");
+
+    retro_vulkan_bindings
+        .write_to_file(out_path.join("bindings_libretro_vulkan.rs"))
+        .expect("Couldn't write bindings for libretro_vulkan.h!");
 }
