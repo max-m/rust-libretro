@@ -91,10 +91,29 @@ jobs:
           echo "RELEASE_FILE=rust-libretro-${{ matrix.name }}-${{ github.ref_name }}.tar" >> $env:GITHUB_ENV
         if: matrix.os == 'windows-latest'
 
-      - name: Compile
+      - name: Extract example names and their required features
+        id: examples
+        shell: bash
         run: |
-            cargo build --release -p rust-libretro --examples --features="unstable-env-commands log"
-            cargo build --release -p rust-libretro-example-core
+          echo "value<<EOF" >> $GITHUB_OUTPUT
+          cargo metadata --format-version 1 --no-deps | jq -r "
+            .packages[].targets[]
+              | select(.kind[] | contains(\"example\"))
+              | \"--example \(.name) --features '\(.[\"required-features\"] | join(\" \"))'\"
+          " >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build the examples
+        shell: bash
+        run: |
+          while IFS= read -r line; do
+            cmd="cargo build --release $line"
+            echo "Executing \"$cmd\""
+            eval $cmd
+          done <<< "${{ steps.examples.outputs.value }}"
+
+      - name: Compile the dedicated example core crate
+        run: cargo build --release -p rust-libretro-example-core
 
       - name: Remove library prefixes
         working-directory: target/release/

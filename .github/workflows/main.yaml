@@ -105,7 +105,27 @@ jobs:
       - run: cargo test --workspace --verbose --no-default-features
       - run: cargo test --workspace --verbose --all-features
 
-      - run: cargo build -p rust-libretro --examples --features="unstable-env-commands log"
+      - name: Extract example names and their required features
+        id: examples
+        shell: bash
+        run: |
+          echo "value<<EOF" >> $GITHUB_OUTPUT
+          cargo metadata --format-version 1 --no-deps | jq -r "
+            .packages[].targets[]
+              | select(.kind[] | contains(\"example\"))
+              | \"--example \(.name) --features '\(.[\"required-features\"] | join(\" \"))'\"
+          " >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build the examples
+        shell: bash
+        run: |
+          while IFS= read -r line; do
+            cmd="cargo build $line"
+            echo "Executing \"$cmd\""
+            eval $cmd
+          done <<< "${{ steps.examples.outputs.value }}"
+
       - run: cargo build -p rust-libretro-example-core
 
       - name: Remove library prefixes
