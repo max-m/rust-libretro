@@ -15,6 +15,7 @@ pub mod environment;
 pub mod types;
 pub mod util;
 
+pub use const_str;
 pub use macros::*;
 pub use rust_libretro_proc as proc;
 pub use rust_libretro_sys as sys;

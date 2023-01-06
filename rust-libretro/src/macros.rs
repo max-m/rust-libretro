@@ -39,10 +39,10 @@ macro_rules! input_descriptors {
 #[macro_export]
 macro_rules! env_version {
     ( $variable:literal ) => {{
-        let parts: [&str; 3] = const_str::split!(env!($variable), ".");
-        let major = const_str::parse!(parts[0], u16);
-        let minor = const_str::parse!(parts[1], u16);
-        let patch = const_str::parse!(parts[2], u16);
-        Version::new(major, minor, patch)
+        let parts: [&str; 3] = $crate::const_str::split!(env!($variable), ".");
+        let major = $crate::const_str::parse!(parts[0], u16);
+        let minor = $crate::const_str::parse!(parts[1], u16);
+        let patch = $crate::const_str::parse!(parts[2], u16);
+        $crate::util::Version::new(major, minor, patch)
     }};
 }

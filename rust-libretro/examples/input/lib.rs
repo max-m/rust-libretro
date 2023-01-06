@@ -2,7 +2,7 @@ use image::{DynamicImage, ImageFormat, ImageResult};
 use rust_libretro::{
     contexts::*,
     core::{Core, CoreOptions},
-    retro_core,
+    env_version, retro_core,
     sys::*,
     types::*,
 };
@@ -41,7 +41,7 @@ impl Core for InputTestCore {
     fn get_info(&self) -> SystemInfo {
         SystemInfo {
             library_name: CString::new("InputTestCore").unwrap(),
-            library_version: CString::new("0.1.0").unwrap(),
+            library_version: CString::new(env_version!("CARGO_PKG_VERSION").to_string()).unwrap(),
             valid_extensions: CString::new("").unwrap(),
 
             need_fullpath: false,

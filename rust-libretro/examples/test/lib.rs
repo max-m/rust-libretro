@@ -20,8 +20,8 @@
 
 use libc::c_char;
 use rust_libretro::{
-    contexts::*, core::Core, input_descriptor, input_descriptors, proc::CoreOptions, retro_core,
-    sys::*, types::*,
+    contexts::*, core::Core, env_version, input_descriptor, input_descriptors, proc::CoreOptions,
+    retro_core, sys::*, types::*,
 };
 use std::ffi::CString;
 
@@ -582,7 +582,7 @@ impl Core for TestCore {
     fn get_info(&self) -> SystemInfo {
         SystemInfo {
             library_name: CString::new("TestCore").unwrap(),
-            library_version: CString::new("0.1.0").unwrap(),
+            library_version: CString::new(env_version!("CARGO_PKG_VERSION").to_string()).unwrap(),
             valid_extensions: CString::new("").unwrap(),
 
             need_fullpath: false,

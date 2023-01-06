@@ -23,7 +23,9 @@ use dasp_sample::Sample;
 use dasp_signal::{self as signal, ConstHz, IntoInterleavedSamples, ScaleAmp, Signal, Sine};
 use num::Integer;
 use num_traits::{cast::AsPrimitive, int::PrimInt};
-use rust_libretro::{contexts::*, core::Core, proc::CoreOptions, retro_core, sys::*, types::*};
+use rust_libretro::{
+    contexts::*, core::Core, env_version, proc::CoreOptions, retro_core, sys::*, types::*,
+};
 use serde::{Deserialize, Serialize, Serializer};
 use std::{char, ffi::CString, fmt::Display};
 
@@ -798,7 +800,7 @@ impl Core for AdvancedTestCore {
     fn get_info(&self) -> SystemInfo {
         SystemInfo {
             library_name: CString::new("AdvancedTestCore").unwrap(),
-            library_version: CString::new("0.1.0").unwrap(),
+            library_version: CString::new(env_version!("CARGO_PKG_VERSION").to_string()).unwrap(),
             valid_extensions: CString::new("").unwrap(),
 
             need_fullpath: false,

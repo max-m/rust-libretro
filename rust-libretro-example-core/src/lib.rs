@@ -1,5 +1,5 @@
 use rust_libretro::{
-    contexts::*, core::Core, input_descriptors, proc::*, retro_core, sys::*, types::*,
+    contexts::*, core::Core, env_version, input_descriptors, proc::*, retro_core, sys::*, types::*,
 };
 use std::ffi::CString;
 
@@ -67,7 +67,7 @@ impl Core for ExampleCore {
     fn get_info(&self) -> SystemInfo {
         SystemInfo {
             library_name: CString::new("Example Core").unwrap(),
-            library_version: CString::new("0.1.0").unwrap(),
+            library_version: CString::new(env_version!("CARGO_PKG_VERSION").to_string()).unwrap(),
             valid_extensions: CString::new("").unwrap(),
 
             need_fullpath: false,
