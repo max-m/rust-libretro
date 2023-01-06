@@ -202,12 +202,12 @@ pub trait Core: CoreOptions {
     }
 
     /// **TODO:** Documentation
-    fn on_hw_context_reset(&mut self) {
+    fn on_hw_context_reset(&mut self, _ctx: &mut GenericContext) {
         // Do nothing
     }
 
     /// **TODO:** Documentation
-    fn on_hw_context_destroyed(&mut self) {
+    fn on_hw_context_destroyed(&mut self, _ctx: &mut GenericContext) {
         // Do nothing
     }
 

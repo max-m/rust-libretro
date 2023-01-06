@@ -5,10 +5,11 @@
 //! but their Ash bindings drop this prefix in favor of the "vk" module
 //! (e.g. "VkDevice" becomes "vk::Device").
 
+pub use ash;
 use ash::vk::*;
 
-pub type PFN_vkGetInstanceProcAddr = ash::vk::PFN_vkGetInstanceProcAddr;
-pub type PFN_vkGetDeviceProcAddr = ash::vk::PFN_vkGetDeviceProcAddr;
+pub type PFN_vkGetInstanceProcAddr = Option<ash::vk::PFN_vkGetInstanceProcAddr>;
+pub type PFN_vkGetDeviceProcAddr = Option<ash::vk::PFN_vkGetDeviceProcAddr>;
 pub type VkApplicationInfo = ApplicationInfo;
 pub type VkCommandBuffer = CommandBuffer;
 pub type VkDevice = Device;

@@ -1,6 +1,7 @@
 //! Unsafe functions related to the libretro environment callback.
 //! For safe versions have a look at the [`contexts`] module and
 //! the context types you get in your core callbacks.
+
 use super::{types::*, *};
 
 /// Gets a value from an environment callback.
@@ -13,7 +14,9 @@ pub unsafe fn get<T: Default>(callback: retro_environment_t, id: u32) -> Option<
 
 /// Similar to [`get`] but uses uninitialized memory instead of the [`Default`] trait.
 pub unsafe fn get_unchecked<T>(callback: retro_environment_t, id: u32) -> Option<(T, bool)> {
-    get_mut(callback, id, std::mem::MaybeUninit::zeroed().assume_init())
+    let data = std::mem::MaybeUninit::zeroed().assume_init();
+
+    get_mut(callback, id, data)
 }
 
 /// Passes a value to the environment callback and returns the modified value.
@@ -857,7 +860,28 @@ pub unsafe fn get_hw_render_interface(
     callback: retro_environment_t,
 ) -> Option<retro_hw_render_interface> {
     // const struct retro_hw_render_interface **
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE).map(|(v, _)| v)
+    get_mut(
+        callback,
+        RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE,
+        std::ptr::null(),
+    )
+    .map(|(v, _)| *v)
+}
+
+/// See [`get_hw_render_interface`].
+#[cfg(feature = "vulkan")]
+#[proc::context(GenericContext)]
+#[proc::unstable(feature = "env-commands")]
+pub unsafe fn get_hw_render_interface_vulkan(
+    callback: retro_environment_t,
+) -> Option<retro_hw_render_interface_vulkan> {
+    // const struct retro_hw_render_interface_vulkan **
+    get_mut(
+        callback,
+        RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE,
+        std::ptr::null::<retro_hw_render_interface_vulkan>(),
+    )
+    .map(|(v, _)| (*v).clone())
 }
 
 /// If true, the Core implementation supports achievements.
@@ -879,19 +903,13 @@ pub unsafe fn set_support_achievements(callback: retro_environment_t, value: boo
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn set_hw_render_context_negotiation_interface(
     callback: retro_environment_t,
-    interface_type: retro_hw_render_context_negotiation_interface_type,
-    interface_version: ::std::os::raw::c_uint,
+    interface: &retro_hw_render_context_negotiation_interface,
 ) -> bool {
-    let data = retro_hw_render_context_negotiation_interface {
-        interface_type,
-        interface_version,
-    };
-
     // const struct retro_hw_render_context_negotiation_interface *
-    set(
+    set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE,
-        data,
+        interface,
     )
     .unwrap_or(false)
 }

@@ -9,13 +9,16 @@
 use core::fmt::Display;
 use rust_libretro_sys_proc::TryFromPrimitive;
 
+include!(concat!(env!("OUT_DIR"), "/bindings_libretro.rs"));
+
 #[cfg(feature = "vulkan")]
 pub mod vulkan;
 
 #[cfg(feature = "vulkan")]
 use vulkan::*;
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+#[cfg(feature = "vulkan")]
+include!(concat!(env!("OUT_DIR"), "/bindings_libretro_vulkan.rs"));
 
 /// #define RETRO_DEVICE_SUBCLASS(base, id) (((id + 1) << RETRO_DEVICE_TYPE_SHIFT) | base)
 #[macro_export]

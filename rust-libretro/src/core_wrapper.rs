@@ -27,6 +27,10 @@ pub struct InterfaceList {
 
     #[unstable(feature = "env-commands")]
     pub vfs_interface_info: VfsInterfaceInfo,
+
+    #[unstable(feature = "env-commands")]
+    pub hw_render_context_negotiation_interface:
+        Option<Box<dyn HwRenderContextNegotiationInterface>>,
 }
 
 /// Holds the core instance as well as runtime information from the libretro frontend.

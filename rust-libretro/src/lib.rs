@@ -797,7 +797,12 @@ pub unsafe extern "C" fn retro_hw_context_reset_callback() {
     log::trace!("retro_hw_context_reset_callback()");
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        return wrapper.core.on_hw_context_reset();
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
+
+        return wrapper.core.on_hw_context_reset(&mut ctx);
     }
 
     panic!("retro_hw_context_reset_callback: Core has not been initialized yet!");
@@ -810,7 +815,12 @@ pub unsafe extern "C" fn retro_hw_context_destroyed_callback() {
     log::trace!("retro_hw_context_destroyed_callback()");
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        return wrapper.core.on_hw_context_destroyed();
+        let mut ctx = GenericContext::new(
+            &wrapper.environment_callback,
+            Arc::clone(&wrapper.interfaces),
+        );
+
+        return wrapper.core.on_hw_context_destroyed(&mut ctx);
     }
 
     panic!("retro_hw_context_destroyed_callback: Core has not been initialized yet!");

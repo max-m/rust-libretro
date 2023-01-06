@@ -473,5 +473,31 @@ pub mod unstable {
             unsafe { std::slice::from_raw_parts_mut(self.data, self.data_len) }
         }
     }
+
+    pub trait HwRenderContextNegotiationInterface: std::fmt::Debug {
+        fn as_any(&self) -> &dyn std::any::Any;
+    }
+
+    impl HwRenderContextNegotiationInterface for retro_hw_render_context_negotiation_interface {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[cfg(feature = "vulkan")]
+    impl HwRenderContextNegotiationInterface for retro_hw_render_context_negotiation_interface_vulkan {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "vulkan")]
+    fn retro_hw_render_context_negotiation_interface_vulkan_is_superset() {
+        assert!(
+            std::mem::size_of::<retro_hw_render_context_negotiation_interface_vulkan>()
+                >= std::mem::size_of::<retro_hw_render_context_negotiation_interface>(),
+        );
+    }
 }
 pub use unstable::*;
