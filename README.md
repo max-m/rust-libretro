@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/max-m/rust-libretro/master/media/logo.svg" width="212px" height="212px" alt="rust-libretro logo" />
 
-rust-libretro
+[rust-libretro](rust-libretro)
 =============
 
 A Rust library providing abstractions over the [libretro API](/rust-libretro-sys).
@@ -10,12 +10,12 @@ A Rust library providing abstractions over the [libretro API](/rust-libretro-sys
 [![Documentation](https://docs.rs/rust-libretro/badge.svg)](https://docs.rs/rust-libretro)
 ![License](https://img.shields.io/crates/l/rust-libretro.svg)
 
-rust-libretro-example-core
+[rust-libretro-example-core](rust-libretro-example-core)
 ==========================
 
 Very simple example core using the [rust-libretro](/rust-libretro) API abstractions.
 
-rust-libretro-sys
+[rust-libretro-sys](rust-libretro-sys)
 =================
 
 Raw bindings to the libretro API (generated with bindgen).
