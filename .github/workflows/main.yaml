@@ -1,5 +1,16 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    paths-ignore:
+        - ".github/workflows/release.yaml"
+        - "media/*"
+        - "**.md"
+  pull_request:
+    paths-ignore:
+        - ".github/workflows/release.yaml"
+        - "media/*"
+        - "**.md"
 
 jobs:
   rustfmt:
@@ -16,7 +27,10 @@ jobs:
     name: Run Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: host
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -30,6 +44,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: host
       - run: cargo doc --all-features --document-private-items
       - name: Add docs to archive
         working-directory: target/doc
@@ -48,7 +64,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build: [stable, beta, nightly, macos, win64] # win32
+        build: [
+          stable,
+          beta,
+          nightly,
+          macos-amd64,
+          macos-aarch64,
+          win32,
+          win64
+        ]
         include:
           - build: stable
             os: ubuntu-latest
@@ -56,54 +80,90 @@ jobs:
             prefix: lib
             name: linux-amd64
             ext: so
+
           - build: beta
             os: ubuntu-latest
             rust: beta
             prefix: lib
             name: linux-amd64_rust-beta
             ext: so
+
           - build: nightly
             os: ubuntu-latest
             rust: nightly
             prefix: lib
             name: linux-amd64_rust-nightly
             ext: so
-          - build: macos
+
+          - build: macos-amd64
             os: macos-latest
             rust: stable
             prefix: lib
             name: macos-amd64
             ext: dylib
-          # - build: win32
-          #   os: windows-latest
-          #   rust: stable-i686
-          #   name: windows-32bit
-          #   ext: dll
+
+          - build: macos-aarch64
+            os: macos-latest
+            rust: stable
+            prefix: lib
+            name: macos-aarch64
+            target: aarch64-apple-darwin
+            ext: dylib
+
+          - build: win32
+            os: windows-latest
+            rust: stable-i686
+            name: windows-32bit
+            clang-platform: x86
+            target: i686-pc-windows-msvc
+            ext: dll
+
           - build: win64
             os: windows-latest
             rust: stable-x86_64
             name: windows-amd64
             ext: dll
+
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - name: Set LIBCLANG_PATH
-        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
-        if: matrix.os == 'windows-latest'
+        with:
+          shared-key: ${{ matrix.name }}
+
       - name: MSVC linker args
         # the MSVC linker will scream at us otherwise when trying to build the tests for `rust-libretro`,
         # because in that case `__retro_init_core` will not have been exported by a core implementation.
         run: |
           echo "RUSTFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
           echo "RUSTDOCFLAGS=-Clink-arg=/FORCE:UNRESOLVED" >> $env:GITHUB_ENV
+          echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
         if: matrix.os == 'windows-latest'
 
+      - name: Set env for win32
+        run: |
+          choco upgrade llvm -x86 -y --no-progress --allow-downgrade
+          echo "LIBCLANG_PATH=C:\Program Files (x86)\LLVM\bin\" >> $env:GITHUB_ENV
+          echo "CARGO_BUILD_TARGET=i686-pc-windows-msvc" >> $env:GITHUB_ENV
+        if: matrix.build == 'win32'
+
+      - name: Set env for macOS
+        run: brew install coreutils
+        if: matrix.os == 'macos-latest'
+
+      - name: Set env for macos-aarch64
+        run: echo "CARGO_BUILD_TARGET=aarch64-apple-darwin" >> $GITHUB_ENV
+        if: matrix.build == 'macos-aarch64'
+
       - run: cargo test --workspace --verbose
+        if: matrix.build != 'macos-aarch64'
       - run: cargo test --workspace --verbose --no-default-features
+        if: matrix.build != 'macos-aarch64'
       - run: cargo test --workspace --verbose --all-features
+        if: matrix.build != 'macos-aarch64'
 
       - name: Extract example names and their required features
         id: examples
@@ -140,15 +200,25 @@ jobs:
         if: matrix.prefix != '' && matrix.os != 'windows-latest'
 
       - name: Compress Artifacts
-        working-directory: target/debug
         shell: bash
+        id: compression
         run: |
+          base_dir=$(pwd)
           shopt -s nullglob
-          tar cvf ../../rust-libretro-${{ matrix.name }}.tar --exclude='examples/*-????????????????.${{ matrix.ext }}' *.${{ matrix.ext }} examples/*.${{ matrix.ext }}
-          gzip ../../rust-libretro-${{ matrix.name }}.tar
+
+          file=rust-libretro-${{ matrix.name }}.tar
+          cd ${{ format('target/{0}/debug', env.CARGO_BUILD_TARGET) }}
+
+          tar cvf $file \
+            --exclude='examples/*-????????????????.${{ matrix.ext }}' \
+            *.${{ matrix.ext }} \
+            examples/*.${{ matrix.ext }}
+          gzip $file
+
+          echo "file=$(realpath $file.gz --relative-to=$base_dir)" >> $GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v3
         with:
           name: rust-libretro-${{ matrix.name }}
-          path: rust-libretro-${{ matrix.name }}.tar.gz
+          path: ${{ steps.compression.outputs.file }}
           if-no-files-found: error
