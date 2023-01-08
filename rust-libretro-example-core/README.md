@@ -5,7 +5,7 @@ Very simple example core using the [rust-libretro](../rust-libretro) API abstrac
 
 This crate demonstrates how a minimal setup could look like.
 
-[![Build status](https://img.shields.io/github/actions/workflow/status/max-m/rust-libretro/main.yml?branch=master)](https://github.com/max-m/rust-libretro/actions)
+[![Build status](https://img.shields.io/github/actions/workflow/status/max-m/rust-libretro/main.yaml?branch=master)](https://github.com/max-m/rust-libretro/actions)
 [![Latest version](https://img.shields.io/crates/v/rust-libretro-example-core.svg)](https://crates.io/crates/rust-libretro-example-core)
 [![Documentation](https://docs.rs/rust-libretro-example-core/badge.svg)](https://docs.rs/rust-libretro-example-core)
 ![License](https://img.shields.io/crates/l/rust-libretro-example-core.svg)
