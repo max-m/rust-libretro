@@ -1,15 +1,38 @@
 //! [`log::Log`] implementation using the libretro logging interface.
 use super::*;
+use env_logger::filter::{Builder as FilterBuilder, Filter};
 use log::{Level, Metadata, Record};
 use std::io::Write;
 
 pub struct RetroLogger {
     callback: retro_log_callback,
+    filter: Filter,
 }
 
 impl RetroLogger {
     pub fn new(callback: retro_log_callback) -> Self {
-        Self { callback }
+        let mut builder = FilterBuilder::new();
+        let mut set_default_level = true;
+
+        if let Ok(s) = std::env::var("RUST_LOG") {
+            builder.parse(&s);
+
+            // We assume that the user passed a valid filter when the
+            // environment variable was not empty.
+            if !s.trim().is_empty() {
+                set_default_level = false;
+            }
+        }
+
+        // By default the env_logger filter defaults to the error level
+        // if no directives have been set.
+        if set_default_level {
+            builder.filter(None, log::LevelFilter::Trace);
+        }
+
+        let filter = builder.build();
+
+        Self { callback, filter }
     }
 
     fn get_retro_log_level(level: Level) -> retro_log_level {
@@ -25,11 +48,11 @@ impl RetroLogger {
 
 impl log::Log for RetroLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= log::max_level()
+        self.filter.enabled(metadata)
     }
 
     fn log(&self, record: &Record) {
-        if !self.enabled(record.metadata()) {
+        if !self.filter.matches(record) {
             return;
         }
 
