@@ -282,7 +282,8 @@ impl TestCore {
             device.destroy_pipeline_cache(self.vk.pipeline_cache, None);
 
             for i in 0..self.vk.num_swapchain_images {
-                device.free_command_buffers(self.vk.cmd_pool[i], &[self.vk.cmd[i]]);
+                let commands = [self.vk.cmd[i]];
+                device.free_command_buffers(self.vk.cmd_pool[i], &commands);
                 device.destroy_command_pool(self.vk.cmd_pool[i], None);
             }
         }
@@ -388,20 +389,20 @@ impl TestCore {
     fn init_descriptor(&mut self) {
         let device = self.device.as_ref().unwrap();
 
-        let binding = vk::DescriptorSetLayoutBinding::builder()
+        let bindings = [vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build();
+            .build()];
 
-        let pool_sizes = vk::DescriptorPoolSize::builder()
+        let pool_sizes = [vk::DescriptorPoolSize::builder()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(self.vk.num_swapchain_images as u32)
-            .build();
+            .build()];
 
         let set_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&[binding])
+            .bindings(&bindings)
             .build();
 
         self.vk.set_layout = unsafe {
@@ -410,8 +411,10 @@ impl TestCore {
                 .unwrap()
         };
 
+        let layouts = [self.vk.set_layout];
+
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&[self.vk.set_layout])
+            .set_layouts(&layouts)
             .build();
 
         self.vk.pipeline_layout =
@@ -419,36 +422,37 @@ impl TestCore {
 
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .max_sets(self.vk.num_swapchain_images as u32)
-            .pool_sizes(&[pool_sizes])
+            .pool_sizes(&pool_sizes)
             .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
             .build();
 
         self.vk.desc_pool = unsafe { device.create_descriptor_pool(&pool_info, None).unwrap() };
+        let layouts = [self.vk.set_layout];
 
         let alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(self.vk.desc_pool)
-            .set_layouts(&[self.vk.set_layout])
+            .set_layouts(&layouts)
             .build();
 
         for i in 0..self.vk.num_swapchain_images {
             self.vk.desc_set[i] =
                 unsafe { device.allocate_descriptor_sets(&alloc_info).unwrap()[0] };
 
-            let buffer_info = vk::DescriptorBufferInfo::builder()
+            let buffer_infos = [vk::DescriptorBufferInfo::builder()
                 .buffer(self.vk.ubo[i].buffer)
                 .offset(0)
                 .range(16 * std::mem::size_of::<f32>() as u64)
-                .build();
+                .build()];
 
-            let write = vk::WriteDescriptorSet::builder()
+            let writes = [vk::WriteDescriptorSet::builder()
                 .dst_set(self.vk.desc_set[i])
                 .dst_binding(0)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .buffer_info(&[buffer_info])
-                .build();
+                .buffer_info(&buffer_infos)
+                .build()];
 
             unsafe {
-                device.update_descriptor_sets(&[write], &[]);
+                device.update_descriptor_sets(&writes, &[]);
             }
         }
     }
@@ -456,7 +460,7 @@ impl TestCore {
     fn init_render_pass(&mut self, format: vk::Format) {
         let device = self.device.as_ref().unwrap();
 
-        let attachment = vk::AttachmentDescription::builder()
+        let attachments = [vk::AttachmentDescription::builder()
             .format(format)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::CLEAR)
@@ -465,18 +469,20 @@ impl TestCore {
             .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .build();
+            .build()];
 
-        let subpass = vk::SubpassDescription::builder()
+        let attachment_references = [vk::AttachmentReference::builder()
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build()];
+
+        let subpasses = [vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&[vk::AttachmentReference::builder()
-                .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .build()])
-            .build();
+            .color_attachments(&attachment_references)
+            .build()];
 
         let rp_info = vk::RenderPassCreateInfo::builder()
-            .attachments(&[attachment])
-            .subpasses(&[subpass])
+            .attachments(&attachments)
+            .subpasses(&subpasses)
             .build();
 
         self.vk.render_pass = unsafe { device.create_render_pass(&rp_info, None).unwrap() }
@@ -507,14 +513,14 @@ impl TestCore {
                 .build(),
         ];
 
-        let binding = vk::VertexInputBindingDescription::builder()
+        let bindings = [vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(std::mem::size_of::<f32>() as u32 * 8)
             .input_rate(vk::VertexInputRate::VERTEX)
-            .build();
+            .build()];
 
         let vertex_input = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_binding_descriptions(&[binding])
+            .vertex_binding_descriptions(&bindings)
             .vertex_attribute_descriptions(&attributes)
             .build();
 
@@ -528,13 +534,13 @@ impl TestCore {
             .line_width(1.0)
             .build();
 
-        let blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
+        let blend_attachments = [vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(false)
             .color_write_mask(vk::ColorComponentFlags::RGBA)
-            .build();
+            .build()];
 
         let blend = vk::PipelineColorBlendStateCreateInfo::builder()
-            .attachments(&[blend_attachment])
+            .attachments(&blend_attachments)
             .build();
 
         let viewport = vk::PipelineViewportStateCreateInfo::builder()
@@ -553,8 +559,10 @@ impl TestCore {
             .rasterization_samples(vk::SampleCountFlags::TYPE_1)
             .build();
 
+        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+
         let dynamic = vk::PipelineDynamicStateCreateInfo::builder()
-            .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
+            .dynamic_states(&dynamic_states)
             .build();
 
         let vert_mod =
@@ -576,7 +584,7 @@ impl TestCore {
                 .build(),
         ];
 
-        let pipe = vk::GraphicsPipelineCreateInfo::builder()
+        let pipes = [vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stages)
             .vertex_input_state(&vertex_input)
             .input_assembly_state(&input_assembly)
@@ -588,11 +596,11 @@ impl TestCore {
             .dynamic_state(&dynamic)
             .render_pass(self.vk.render_pass)
             .layout(self.vk.pipeline_layout)
-            .build();
+            .build()];
 
         self.vk.pipeline = unsafe {
             device
-                .create_graphics_pipelines(self.vk.pipeline_cache, &[pipe], None)
+                .create_graphics_pipelines(self.vk.pipeline_cache, &pipes, None)
                 .unwrap()[0]
         };
 
@@ -680,9 +688,11 @@ impl TestCore {
 
             self.vk.images[i].image_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
 
+            let attachments = [self.vk.images[i].image_view];
+
             let fb_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.vk.render_pass)
-                .attachments(&[self.vk.images[i].image_view])
+                .attachments(&attachments)
                 .width(self.resolution.0 as u32)
                 .height(self.resolution.1 as u32)
                 .layers(1)
@@ -744,7 +754,7 @@ impl TestCore {
             device.begin_command_buffer(cmd, &begin_info).unwrap();
         }
 
-        let prepare_rendering = vk::ImageMemoryBarrier::builder()
+        let prepare_renderings = [vk::ImageMemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::NONE)
             .dst_access_mask(
                 vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::COLOR_ATTACHMENT_READ,
@@ -761,7 +771,7 @@ impl TestCore {
                     .layer_count(1)
                     .build(),
             )
-            .build();
+            .build()];
 
         unsafe {
             device.cmd_pipeline_barrier(
@@ -771,15 +781,15 @@ impl TestCore {
                 vk::DependencyFlags::empty(),
                 &[],
                 &[],
-                &[prepare_rendering],
+                &prepare_renderings,
             );
         }
 
-        let clear_value = vk::ClearValue {
+        let clear_values = [vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [0.8, 0.6, 0.2, 1.0],
             },
-        };
+        }];
 
         let rp_begin = vk::RenderPassBeginInfo::builder()
             .render_pass(self.vk.render_pass)
@@ -794,8 +804,10 @@ impl TestCore {
                     )
                     .build(),
             )
-            .clear_values(&[clear_value])
+            .clear_values(&clear_values)
             .build();
+
+        let desc_sets = [self.vk.desc_set[self.vk.index]];
 
         unsafe {
             device.cmd_begin_render_pass(cmd, &rp_begin, vk::SubpassContents::INLINE);
@@ -805,44 +817,47 @@ impl TestCore {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.vk.pipeline_layout,
                 0,
-                &[self.vk.desc_set[self.vk.index]],
+                &desc_sets,
                 &[],
             );
         }
 
-        let vp = vk::Viewport::builder()
+        let view_ports = [vk::Viewport::builder()
             .x(0.0)
             .y(0.0)
             .width(self.resolution.0 as f32)
             .height(self.resolution.1 as f32)
             .min_depth(0.0)
             .max_depth(1.0)
-            .build();
+            .build()];
 
         unsafe {
-            device.cmd_set_viewport(cmd, 0, &[vp]);
+            device.cmd_set_viewport(cmd, 0, &view_ports);
         }
 
-        let scissor = vk::Rect2D::builder()
+        let scissors = [vk::Rect2D::builder()
             .extent(
                 vk::Extent2D::builder()
                     .width(self.resolution.0 as u32)
                     .height(self.resolution.1 as u32)
                     .build(),
             )
-            .build();
+            .build()];
+
+        let vertex_buffers = [self.vk.vbo.buffer];
+        let vbo_offsets = [0];
 
         unsafe {
-            device.cmd_set_scissor(cmd, 0, &[scissor]);
+            device.cmd_set_scissor(cmd, 0, &scissors);
 
-            device.cmd_bind_vertex_buffers(cmd, 0, &[self.vk.vbo.buffer], &[0]);
+            device.cmd_bind_vertex_buffers(cmd, 0, &vertex_buffers, &vbo_offsets);
 
             device.cmd_draw(cmd, 3, 1, 0, 0);
 
             device.cmd_end_render_pass(cmd);
         }
 
-        let prepare_presentation = vk::ImageMemoryBarrier::builder()
+        let prepare_presentations = [vk::ImageMemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
@@ -857,7 +872,7 @@ impl TestCore {
                     .layer_count(1)
                     .build(),
             )
-            .build();
+            .build()];
 
         unsafe {
             device.cmd_pipeline_barrier(
@@ -867,7 +882,7 @@ impl TestCore {
                 vk::DependencyFlags::empty(),
                 &[],
                 &[],
-                &[prepare_presentation],
+                &prepare_presentations,
             );
 
             device.end_command_buffer(cmd).unwrap();

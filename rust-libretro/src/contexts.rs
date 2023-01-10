@@ -1103,17 +1103,20 @@ impl<'a> LoadGameContext<'a> {
     }
 
     #[proc::unstable(feature = "env-commands")]
-    pub unsafe fn enable_hw_render_negotiation_interface(
+    pub unsafe fn set_hw_render_context_negotiation_interface_data<
+        T: HwRenderContextNegotiationInterface + 'static,
+    >(
         &mut self,
-        interface_type: retro_hw_render_context_negotiation_interface_type,
-        interface_version: u32,
+        interface: T,
     ) -> bool {
-        let data = Box::new(retro_hw_render_context_negotiation_interface {
-            interface_type,
-            interface_version,
-        });
+        assert!(
+            std::mem::size_of::<T>()
+                >= std::mem::size_of::<retro_hw_render_context_negotiation_interface>()
+        );
 
         let mut interfaces = self.interfaces.write().unwrap();
+
+        let data = Box::new(interface);
 
         interfaces
             .hw_render_context_negotiation_interface
@@ -1124,10 +1127,27 @@ impl<'a> LoadGameContext<'a> {
             .as_ref()
             .unwrap()
             .as_any()
-            .downcast_ref::<retro_hw_render_context_negotiation_interface>()
+            .downcast_ref::<T>()
             .unwrap();
 
-        self.set_hw_render_context_negotiation_interface(interface)
+        let interface =
+            interface as *const _ as *const retro_hw_render_context_negotiation_interface;
+
+        self.set_hw_render_context_negotiation_interface(&*interface)
+    }
+
+    #[proc::unstable(feature = "env-commands")]
+    pub unsafe fn enable_hw_render_negotiation_interface(
+        &mut self,
+        interface_type: retro_hw_render_context_negotiation_interface_type,
+        interface_version: u32,
+    ) -> bool {
+        self.set_hw_render_context_negotiation_interface_data(
+            retro_hw_render_context_negotiation_interface {
+                interface_type,
+                interface_version,
+            },
+        )
     }
 
     #[cfg(feature = "vulkan")]
@@ -1138,34 +1158,13 @@ impl<'a> LoadGameContext<'a> {
         create_device: retro_vulkan_create_device_t,
         destroy_device: retro_vulkan_destroy_device_t,
     ) -> bool {
-        let data = Box::new(retro_hw_render_context_negotiation_interface_vulkan {
+        self.set_hw_render_context_negotiation_interface_data(retro_hw_render_context_negotiation_interface_vulkan {
             interface_type: retro_hw_render_context_negotiation_interface_type::RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN,
             interface_version: RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN_VERSION,
             get_application_info,
             create_device,
             destroy_device,
-        });
-
-        let mut interfaces = self.interfaces.write().unwrap();
-
-        interfaces
-            .hw_render_context_negotiation_interface
-            .replace(data);
-
-        let interface = interfaces
-            .hw_render_context_negotiation_interface
-            .as_ref()
-            .unwrap()
-            .as_any()
-            .downcast_ref::<retro_hw_render_context_negotiation_interface_vulkan>()
-            .unwrap();
-
-        // `retro_hw_render_context_negotiation_interface_vulkan`
-        // is a superset of `retro_hw_render_context_negotiation_interface`
-        let interface =
-            interface as *const _ as *const retro_hw_render_context_negotiation_interface;
-
-        self.set_hw_render_context_negotiation_interface(&*interface)
+        })
     }
 }
 into_generic!(LoadGameContext<'a>, 'a);
