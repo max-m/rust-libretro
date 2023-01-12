@@ -2,15 +2,17 @@ name: CI
 
 on:
   push:
+    branches:
+      - '**'
     paths-ignore:
-        - ".github/workflows/release.yaml"
-        - "media/*"
-        - "**.md"
+      - ".github/workflows/release.yaml"
+      - "media/*"
+      - "**.md"
   pull_request:
     paths-ignore:
-        - ".github/workflows/release.yaml"
-        - "media/*"
-        - "**.md"
+      - ".github/workflows/release.yaml"
+      - "media/*"
+      - "**.md"
 
 jobs:
   rustfmt:
