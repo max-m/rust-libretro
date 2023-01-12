@@ -38,15 +38,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build: [
-          stable,
-          beta,
-          nightly,
-          macos-amd64,
-          macos-aarch64,
-          win32,
-          win64
-        ]
+        build:
+          - stable
+          - beta
+          - nightly
+          - macos-amd64
+          - macos-aarch64
+          - win32
+          - win64
+
         include:
           - build: stable
             os: ubuntu-latest
@@ -118,12 +118,12 @@ jobs:
         run: |
           echo "RUSTFLAGS=-Cstrip=symbols" >> $env:GITHUB_ENV
           echo "RELEASE_FILE=rust-libretro-${{ matrix.name }}-${{ github.ref_name }}.tar" >> $env:GITHUB_ENV
-          echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+          echo "LIBCLANG_PATH=$((Get-Command clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
         if: matrix.os == 'windows-latest'
 
       - name: Set env for win32
         run: |
-          choco upgrade llvm -x86 -y --no-progress --allow-downgrade
+          choco upgrade llvm --forcex86 -y --no-progress --allow-downgrade --force --force-dependencies
           echo "LIBCLANG_PATH=C:\Program Files (x86)\LLVM\bin\" >> $env:GITHUB_ENV
           echo "CARGO_BUILD_TARGET=i686-pc-windows-msvc" >> $env:GITHUB_ENV
         if: matrix.build == 'win32'
