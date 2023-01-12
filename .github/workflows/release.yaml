@@ -24,13 +24,12 @@ jobs:
           gzip ../../rust-libretro-docs.tar
 
       - name: Release Docs
-        uses: softprops/action-gh-release@v1
+        uses: svenstaro/upload-release-action@v2
         with:
-          tag_name: ${{ github.ref }}
-          name: rust-libretro ${{ github.ref_name }}
-          draft: false
+          file: rust-libretro-docs.tar.gz
+          release_name: rust-libretro ${{ github.ref_name }}
+          tag: ${{ github.ref }}
           prerelease: ${{ contains(github.ref, 'rc') }}
-          files: rust-libretro-docs.tar.gz
 
   binaries:
     name: Build release binaries
@@ -192,9 +191,7 @@ jobs:
       - name: Release
         uses: svenstaro/upload-release-action@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
+          file: ${{ steps.compression.outputs.file }}
           release_name: rust-libretro ${{ github.ref_name }}
-          file: ${{ env.RELEASE_FILE }}.gz
-          draft: false
+          tag: ${{ github.ref }}
           prerelease: ${{ contains(github.ref, 'rc') }}
