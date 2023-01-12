@@ -159,76 +159,111 @@ impl<'a> GenericContext<'a> {
         false
     }
 
-    pub fn start_perf_counter(&mut self, name: &'static str) {
+    pub fn start_perf_counter(
+        &mut self,
+        name: &'static str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::collections::hash_map::Entry;
+
         let mut interfaces = self.interfaces.write().unwrap();
 
-        if let Some(interface) = interfaces.perf_interface.interface {
-            if let Some(start) = interface.perf_start {
-                if let Some(register) = interface.perf_register {
-                    let counter = interfaces
-                        .perf_interface
-                        .counters
-                        .entry(name)
-                        .or_insert_with(|| {
-                            let ident = CString::new(name).unwrap();
-                            let ptr = ident.as_ptr();
+        let interface = interfaces
+            .perf_interface
+            .interface
+            .ok_or("Performance interface not found, did you call `enable_perf_interface()`?")?;
 
-                            PerfCounter {
-                                ident,
-                                counter: retro_perf_counter {
-                                    ident: ptr,
-                                    start: 0,
-                                    total: 0,
-                                    call_cnt: 0,
-                                    registered: false,
-                                },
-                            }
-                        });
+        let counter = match interfaces.perf_interface.counters.entry(name) {
+            Entry::Occupied(counter) => counter.into_mut(),
+            Entry::Vacant(entry) => {
+                let ident = CString::new(name)?;
+                let ptr = ident.as_ptr();
 
-                    if !counter.counter.registered {
-                        unsafe {
-                            register(&mut counter.counter as *mut _);
-                        }
-                    }
+                entry.insert(PerfCounter {
+                    ident,
+                    counter: retro_perf_counter {
+                        ident: ptr,
+                        start: 0,
+                        total: 0,
+                        call_cnt: 0,
+                        registered: false,
+                    },
+                })
+            }
+        };
+
+        if !counter.counter.registered {
+            let register = interface
+                .perf_register
+                .ok_or("`perf_register()` is missing on the performance interface")?;
+
+            unsafe {
+                register(&mut counter.counter as *mut _);
+            }
+        }
+
+        let start = interface
+            .perf_start
+            .ok_or("`perf_start()` is missing on the performance interface")?;
+
+        unsafe {
+            start(&mut counter.counter as *mut _);
+        }
+
+        Ok(())
+    }
+
+    pub fn stop_perf_counter(
+        &mut self,
+        name: &'static str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::collections::hash_map::Entry;
+
+        let mut interfaces = self.interfaces.write().unwrap();
+
+        let interface = interfaces
+            .perf_interface
+            .interface
+            .ok_or("Performance interface not found, did you call `enable_perf_interface()`?")?;
+
+        match interfaces.perf_interface.counters.entry(name) {
+            Entry::Occupied(counter) => {
+                let counter = counter.into_mut();
+
+                if counter.counter.registered {
+                    let stop = interface
+                        .perf_stop
+                        .ok_or("`perf_stop()` is missing on the performance interface")?;
 
                     unsafe {
-                        start(&mut counter.counter as *mut _);
+                        stop(&mut counter.counter as *mut _);
                     }
+
+                    return Ok(());
                 }
+
+                return Err(format!("Performance counter “{name}” has not been registered").into());
             }
+            _ => Err(format!("Unknown performance counter “{name}”").into()),
         }
     }
 
-    pub fn stop_perf_counter(&mut self, name: &'static str) {
-        let mut interfaces = self.interfaces.write().unwrap();
-
-        if let Some(interface) = interfaces.perf_interface.interface {
-            if let Some(stop) = interface.perf_stop {
-                use std::collections::hash_map::Entry;
-
-                if let Entry::Occupied(counter) = interfaces.perf_interface.counters.entry(name) {
-                    let counter = counter.into_mut();
-
-                    if counter.counter.registered {
-                        unsafe {
-                            stop(&mut counter.counter as *mut _);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn perf_log(&self) {
+    pub fn perf_log(&self) -> Result<(), Box<dyn std::error::Error>> {
         let interfaces = self.interfaces.read().unwrap();
 
-        if let Some(interface) = interfaces.perf_interface.interface {
-            if let Some(log) = interface.perf_log {
-                unsafe {
-                    log();
-                }
-            }
+        let interface = interfaces
+            .perf_interface
+            .interface
+            .ok_or("Performance interface not found, did you call `enable_perf_interface()`?")?;
+
+        let log = interface
+            .perf_log
+            .ok_or("`perf_log()` is missing on the performance interface")?;
+
+        unsafe {
+            log();
         }
+
+        Ok(())
     }
 
     pub fn perf_get_time_usec(&self) -> i64 {
@@ -238,7 +273,11 @@ impl<'a> GenericContext<'a> {
             if let Some(get_time_usec) = interface.get_time_usec {
                 return unsafe { get_time_usec() };
             }
+
+            log::error!("`get_time_usec()` is missing on the performance interface");
         }
+
+        log::error!("Performance interface not found, did you call `enable_perf_interface()`?");
 
         0
     }
@@ -250,7 +289,11 @@ impl<'a> GenericContext<'a> {
             if let Some(get_perf_counter) = interface.get_perf_counter {
                 return unsafe { get_perf_counter() };
             }
+
+            log::error!("`get_perf_counter()` is missing on the performance interface");
         }
+
+        log::error!("Performance interface not found, did you call `enable_perf_interface()`?");
 
         0
     }
@@ -262,7 +305,11 @@ impl<'a> GenericContext<'a> {
             if let Some(get_cpu_features) = interface.get_cpu_features {
                 return unsafe { CpuFeatures::from_bits_unchecked(get_cpu_features()) };
             }
+
+            log::error!("`get_cpu_features()` is missing on the performance interface");
         }
+
+        log::error!("Performance interface not found, did you call `enable_perf_interface()`?");
 
         CpuFeatures::empty()
     }

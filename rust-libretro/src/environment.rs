@@ -123,7 +123,14 @@ pub unsafe fn can_dupe(callback: retro_environment_t) -> bool {
 /// fallback, stderr).
 #[proc::context(GenericContext)]
 pub unsafe fn set_message(callback: retro_environment_t, message: &str, frames: u32) -> bool {
-    let msg = CString::new(message).unwrap();
+    let msg = match CString::new(message) {
+        Ok(message) => message,
+        Err(err) => {
+            log::error!("{}", err);
+
+            return false;
+        }
+    };
 
     // const struct retro_message *
     set(
@@ -275,7 +282,14 @@ pub unsafe fn set_hw_render(callback: retro_environment_t, data: retro_hw_render
 #[proc::context(OptionsChangedContext)]
 #[allow(clippy::needless_lifetimes)]
 pub unsafe fn get_variable<'a>(callback: retro_environment_t, key: &'a str) -> Option<&'a str> {
-    let key = CString::new(key).unwrap();
+    let key = match CString::new(key) {
+        Ok(key) => key,
+        Err(err) => {
+            log::error!("{}", err);
+
+            return None;
+        }
+    };
 
     let var = retro_variable {
         key: key.as_ptr(),
@@ -1610,7 +1624,14 @@ pub unsafe fn set_message_ext(
     type_: retro_message_type,
     progress: MessageProgress,
 ) -> bool {
-    let msg = CString::new(message).unwrap();
+    let msg = match CString::new(message) {
+        Ok(message) => message,
+        Err(err) => {
+            log::error!("{}", err);
+
+            return false;
+        }
+    };
 
     // const struct retro_message_ext *
     set(

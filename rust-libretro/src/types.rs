@@ -298,7 +298,7 @@ impl From<PixelFormat> for retro_pixel_format {
 #[derive(Debug)]
 pub struct PerfCounter {
     #[allow(unused)]
-    // Borrowed by the `retro_perf_counter`.
+    /// Borrowed by the `retro_perf_counter`.
     pub(crate) ident: CString,
     pub(crate) counter: retro_perf_counter,
 }
