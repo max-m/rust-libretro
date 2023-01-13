@@ -126,6 +126,7 @@ pub unsafe fn set_message(callback: retro_environment_t, message: &str, frames: 
     let msg = match CString::new(message) {
         Ok(message) => message,
         Err(err) => {
+            #[cfg(feature = "log")]
             log::error!("{}", err);
 
             return false;
@@ -285,6 +286,7 @@ pub unsafe fn get_variable<'a>(callback: retro_environment_t, key: &'a str) -> O
     let key = match CString::new(key) {
         Ok(key) => key,
         Err(err) => {
+            #[cfg(feature = "log")]
             log::error!("{}", err);
 
             return None;
@@ -1627,6 +1629,7 @@ pub unsafe fn set_message_ext(
     let msg = match CString::new(message) {
         Ok(message) => message,
         Err(err) => {
+            #[cfg(feature = "log")]
             log::error!("{}", err);
 
             return false;

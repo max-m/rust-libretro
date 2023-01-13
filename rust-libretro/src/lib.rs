@@ -4,9 +4,10 @@
     html_favicon_url = "https://raw.githubusercontent.com/max-m/rust-libretro/master/media/favicon.png"
 )]
 
-mod core_wrapper;
 #[cfg(feature = "log")]
 mod logger;
+
+mod core_wrapper;
 mod macros;
 
 pub mod contexts;

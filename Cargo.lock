@@ -809,7 +809,7 @@ checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
 name = "rust-libretro"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "bincode",
  "bitflags",
@@ -835,7 +835,7 @@ dependencies = [
 
 [[package]]
 name = "rust-libretro-example-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "libc",
  "log",
@@ -844,7 +844,7 @@ dependencies = [
 
 [[package]]
 name = "rust-libretro-proc"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -854,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "rust-libretro-sys"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "ash",
  "bindgen",
@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "rust-libretro-sys-proc"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proc-macro2",
  "quote",

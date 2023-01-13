@@ -274,9 +274,11 @@ impl<'a> GenericContext<'a> {
                 return unsafe { get_time_usec() };
             }
 
+            #[cfg(feature = "log")]
             log::error!("`get_time_usec()` is missing on the performance interface");
         }
 
+        #[cfg(feature = "log")]
         log::error!("Performance interface not found, did you call `enable_perf_interface()`?");
 
         0
@@ -290,9 +292,11 @@ impl<'a> GenericContext<'a> {
                 return unsafe { get_perf_counter() };
             }
 
+            #[cfg(feature = "log")]
             log::error!("`get_perf_counter()` is missing on the performance interface");
         }
 
+        #[cfg(feature = "log")]
         log::error!("Performance interface not found, did you call `enable_perf_interface()`?");
 
         0
@@ -306,9 +310,11 @@ impl<'a> GenericContext<'a> {
                 return unsafe { CpuFeatures::from_bits_unchecked(get_cpu_features()) };
             }
 
+            #[cfg(feature = "log")]
             log::error!("`get_cpu_features()` is missing on the performance interface");
         }
 
+        #[cfg(feature = "log")]
         log::error!("Performance interface not found, did you call `enable_perf_interface()`?");
 
         CpuFeatures::empty()

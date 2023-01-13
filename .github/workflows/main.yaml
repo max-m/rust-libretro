@@ -160,12 +160,17 @@ jobs:
         run: echo "CARGO_BUILD_TARGET=aarch64-apple-darwin" >> $GITHUB_ENV
         if: matrix.build == 'macos-aarch64'
 
-      - run: cargo test --workspace --verbose
-        if: matrix.build != 'macos-aarch64'
-      - run: cargo test --workspace --verbose --no-default-features
-        if: matrix.build != 'macos-aarch64'
-      - run: cargo test --workspace --verbose --all-features
-        if: matrix.build != 'macos-aarch64'
+      - name: Extract names of packages containing tests
+        id: tests
+        shell: bash
+        run: |
+          echo "value<<EOF" >> $GITHUB_OUTPUT
+          cargo metadata --format-version 1 --no-deps | jq -r "
+            .packages[].targets[]
+              | select(.test)
+              | .name
+          " >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Extract example names and their required features
         id: examples
@@ -179,9 +184,43 @@ jobs:
           " >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: cargo test
+        shell: bash
+        run: |
+          set -e
+          while IFS= read -r line; do
+            cmd="cargo test --package $line"
+            echo "Executing \"$cmd\""
+            eval $cmd
+          done <<< "${{ steps.tests.outputs.value }}"
+        if: matrix.build != 'macos-aarch64'
+
+      - name: cargo test --all-features
+        shell: bash
+        run: |
+          set -e
+          while IFS= read -r line; do
+            cmd="cargo test --package $line --verbose --all-features"
+            echo "Executing \"$cmd\""
+            eval $cmd
+          done <<< "${{ steps.tests.outputs.value }}"
+        if: matrix.build != 'macos-aarch64'
+
+      - name: cargo test --no-default-features
+        shell: bash
+        run: |
+          set -e
+          while IFS= read -r line; do
+            cmd="cargo test --package $line --verbose --no-default-features"
+            echo "Executing \"$cmd\""
+            eval $cmd
+          done <<< "${{ steps.tests.outputs.value }}"
+        if: matrix.build != 'macos-aarch64'
+
       - name: Build the examples
         shell: bash
         run: |
+          set -e
           while IFS= read -r line; do
             cmd="cargo build $line"
             echo "Executing \"$cmd\""

@@ -1,6 +1,6 @@
 [package]
 name = "rust-libretro"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = [ "Maximilian Mader" ]
 description = "libretro API abstractions"
@@ -23,8 +23,8 @@ unstable-env-commands = []
 vulkan = ["rust-libretro-sys/vulkan"]
 
 [dependencies]
-rust-libretro-proc = { version = "0.3.0", path = "rust-libretro-proc" }
-rust-libretro-sys = { version = "0.3.0", path = "../rust-libretro-sys" }
+rust-libretro-proc = { version = "0.3.1", path = "rust-libretro-proc" }
+rust-libretro-sys = { version = "0.3.1", path = "../rust-libretro-sys" }
 
 bitflags = "1.3.2"
 cfg-if = "1.0.0"
