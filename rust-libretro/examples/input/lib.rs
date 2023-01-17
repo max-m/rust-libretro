@@ -54,7 +54,8 @@ impl Core for InputTestCore {
             return;
         }
 
-        ctx.set_support_no_game(true);
+        ctx.set_support_no_game(true)
+            .expect("telling the frontend that we can run without content to succeed");
     }
 
     fn on_get_av_info(&mut self, _ctx: &mut GetAvInfoContext) -> retro_system_av_info {
@@ -77,12 +78,15 @@ impl Core for InputTestCore {
         &mut self,
         _info: Option<retro_game_info>,
         ctx: &mut LoadGameContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> rust_libretro::core::Result<()> {
         use image::imageops::{flip_horizontal, flip_vertical, rotate90};
         use DynamicImage::ImageRgba8;
 
-        ctx.set_pixel_format(PixelFormat::XRGB8888);
-        ctx.set_performance_level(0);
+        ctx.set_pixel_format(PixelFormat::XRGB8888).map_err(|_| {
+            rust_libretro::anyhow::anyhow!("Required pixel format “XRGB8888” is not supported")
+        })?;
+
+        let _ = ctx.set_performance_level(0);
 
         fn load(buf: &[u8]) -> ImageResult<DynamicImage> {
             image::load_from_memory_with_format(buf, ImageFormat::Png)
@@ -233,11 +237,11 @@ impl InputTestCore {
 
         let data = unsafe { std::slice::from_raw_parts_mut(dst.data, dst.data_len) };
 
-        let bpp = dst.pitch as usize / dst.width as usize;
+        let bpp = dst.pitch / dst.width as usize;
 
         for y in y_offset..(src.height() + y_offset).min(HEIGHT) {
             for x in x_offset..(src.width() + x_offset).min(WIDTH) {
-                let i = y as usize * dst.pitch as usize + x as usize * bpp;
+                let i = y as usize * dst.pitch + x as usize * bpp;
 
                 let top = if let Some(color) = color {
                     let mut top = src.get_pixel(x - x_offset, y - y_offset);

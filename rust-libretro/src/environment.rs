@@ -2,18 +2,36 @@
 //! For safe versions have a look at the [`contexts`] module and
 //! the context types you get in your core callbacks.
 
-use super::{types::*, *};
+use crate::{
+    contexts::*,
+    error::{EnvironmentCallError, StringError},
+    get_path_from_pointer, get_str_from_pointer, proc,
+    sys::*,
+    types::*,
+};
+use std::{
+    ffi::{c_char, c_void, CString},
+    path::Path,
+};
 
 /// Gets a value from an environment callback.
 ///
 /// The first value of the return type is the queried data,
 /// the second value is the return value of the callback itself.
-pub unsafe fn get<T: Default>(callback: retro_environment_t, id: u32) -> Option<(T, bool)> {
+#[inline(always)]
+pub unsafe fn get<T: Default>(
+    callback: retro_environment_t,
+    id: u32,
+) -> Result<T, EnvironmentCallError> {
     get_mut(callback, id, Default::default())
 }
 
 /// Similar to [`get`] but uses uninitialized memory instead of the [`Default`] trait.
-pub unsafe fn get_unchecked<T>(callback: retro_environment_t, id: u32) -> Option<(T, bool)> {
+#[inline(always)]
+pub unsafe fn get_unchecked<T>(
+    callback: retro_environment_t,
+    id: u32,
+) -> Result<T, EnvironmentCallError> {
     let data = std::mem::MaybeUninit::zeroed().assume_init();
 
     get_mut(callback, id, data)
@@ -22,40 +40,40 @@ pub unsafe fn get_unchecked<T>(callback: retro_environment_t, id: u32) -> Option
 /// Passes a value to the environment callback and returns the modified value.
 ///
 /// The second value is the return value of the callback itself.
-pub unsafe fn get_mut<T>(callback: retro_environment_t, id: u32, mut data: T) -> Option<(T, bool)> {
-    if let Some(callback) = callback {
-        if (callback as *const c_void).is_null() {
-            panic!("Expected environment callback, got NULL pointer instead!");
-        }
+pub unsafe fn get_mut<T>(
+    callback: retro_environment_t,
+    id: u32,
+    mut data: T,
+) -> Result<T, EnvironmentCallError> {
+    let callback = callback.ok_or(EnvironmentCallError::NullPointer("retro_environment_t"))?;
 
-        let status = (callback)(id, (&mut data as *mut _) as *mut c_void);
-
-        Some((data, status))
-    } else {
-        None
+    match (callback)(id, (&mut data as *mut _) as *mut c_void) {
+        true => Ok(data),
+        false => Err(EnvironmentCallError::Failure),
     }
 }
 
 /// Helper function to query a string pointer and convert it into a [`Path`].
-pub unsafe fn get_path<'a>(callback: retro_environment_t, id: u32) -> Option<&'a Path> {
+pub unsafe fn get_path<'a>(
+    callback: retro_environment_t,
+    id: u32,
+) -> Result<&'a Path, EnvironmentCallError> {
     let ptr: *mut c_void = std::ptr::null_mut();
+    let ptr = get_mut(callback, id, ptr)?;
 
-    if let Some((ptr, _)) = get_mut(callback, id, ptr) {
-        return get_path_from_pointer(ptr as *const c_char);
-    }
-
-    None
+    get_path_from_pointer(ptr as *const c_char).map_err(Into::into)
 }
 
 /// Passes a value to the environment callback.
 ///
 /// Returns [`None`] if the environment callback hasn’t been set
 /// and the return status of the callback otherwise.
+#[inline(always)]
 pub unsafe fn set<T: std::fmt::Debug>(
     callback: retro_environment_t,
     id: u32,
     value: T,
-) -> Option<bool> {
+) -> Result<(), EnvironmentCallError> {
     set_ptr(callback, id, &value as *const _)
 }
 
@@ -63,18 +81,47 @@ pub unsafe fn set<T: std::fmt::Debug>(
 ///
 /// Returns [`None`] if the environment callback hasn’t been set
 /// and the return status of the callback otherwise.
-pub unsafe fn set_ptr<T>(callback: retro_environment_t, id: u32, ptr: *const T) -> Option<bool> {
-    if let Some(callback) = callback {
-        if (callback as *const c_void).is_null() {
-            panic!("Expected environment callback, got NULL pointer instead!");
+pub unsafe fn set_ptr<T>(
+    callback: retro_environment_t,
+    id: u32,
+    ptr: *const T,
+) -> Result<(), EnvironmentCallError> {
+    let callback = callback.ok_or(EnvironmentCallError::NullPointer("retro_environment_t"))?;
+
+    match (callback)(id, ptr as *mut c_void) {
+        true => Ok(()),
+        false => Err(EnvironmentCallError::Failure),
+    }
+}
+
+#[macro_export]
+macro_rules! validate_bitflags {
+    ($flags:ident, $ty:ty, $bits:expr) => {{
+        let unchecked = unsafe { $flags::from_bits_unchecked($bits) };
+
+        #[cfg(feature = "strict-bitflags")]
+        {
+            let truncated = $flags::from_bits_truncate($bits);
+
+            if truncated.bits() == $bits {
+                Ok(unchecked)
+            } else {
+                let known_bits = $flags::all().bits();
+                let diff = unchecked.bits() & !known_bits;
+                let unknown = format!("{diff:0width$b}", width = <$ty>::BITS as usize);
+                let known = format!("{known_bits:0width$b}", width = <$ty>::BITS as usize);
+
+                Err($crate::error::EnvironmentCallError::UnknownBits(
+                    known, unknown,
+                ))
+            }
         }
 
-        let status = (callback)(id, ptr as *mut c_void);
-
-        return Some(status);
-    }
-
-    None
+        #[cfg(not(feature = "strict-bitflags"))]
+        {
+            Ok::<_, $crate::error::EnvironmentCallError>(unchecked)
+        }
+    }};
 }
 
 /* ========================================================================== *\
@@ -83,14 +130,16 @@ pub unsafe fn set_ptr<T>(callback: retro_environment_t, id: u32, ptr: *const T) 
 
 /// Sets screen rotation of graphics.
 #[proc::context(GenericContext)]
-pub unsafe fn set_rotation(callback: retro_environment_t, rotation: Rotation) -> bool {
+pub unsafe fn set_rotation(
+    callback: retro_environment_t,
+    rotation: Rotation,
+) -> Result<(), EnvironmentCallError> {
     // const unsigned *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_ROTATION,
         rotation.get_env_value(),
     )
-    .unwrap_or(false)
 }
 
 /// Boolean value whether or not the implementation should use overscan,
@@ -99,21 +148,17 @@ pub unsafe fn set_rotation(callback: retro_environment_t, rotation: Rotation) ->
     note = "This function is considered deprecated in favor of using core options to manage overscan in a more nuanced, core-specific way"
 )]
 #[proc::context(GenericContext)]
-pub unsafe fn get_overscan(callback: retro_environment_t) -> bool {
+pub unsafe fn get_overscan(callback: retro_environment_t) -> Result<(), EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_OVERSCAN)
-        .map(|(v, _)| v)
-        .unwrap_or(false)
 }
 
 /// Boolean value whether or not frontend supports frame duping,
 /// passing NULL to video frame callback.
 #[proc::context(GenericContext)]
-pub unsafe fn can_dupe(callback: retro_environment_t) -> bool {
+pub unsafe fn can_dupe(callback: retro_environment_t) -> Result<(), EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_CAN_DUPE)
-        .map(|(v, _)| v)
-        .unwrap_or(false)
 }
 
 /// Sets a message to be displayed in implementation-specific manner
@@ -122,16 +167,14 @@ pub unsafe fn can_dupe(callback: retro_environment_t) -> bool {
 /// logged via [`RETRO_ENVIRONMENT_GET_LOG_INTERFACE`] (or as a
 /// fallback, stderr).
 #[proc::context(GenericContext)]
-pub unsafe fn set_message(callback: retro_environment_t, message: &str, frames: u32) -> bool {
-    let msg = match CString::new(message) {
-        Ok(message) => message,
-        Err(err) => {
-            #[cfg(feature = "log")]
-            log::error!("{}", err);
-
-            return false;
-        }
-    };
+pub unsafe fn set_message(
+    callback: retro_environment_t,
+    message: &str,
+    frames: u32,
+) -> Result<(), EnvironmentCallError> {
+    // RetroArch copies the string interally,
+    // so we don’t need to keep it around for longer than this call
+    let msg = CString::new(message).map_err(StringError::from)?;
 
     // const struct retro_message *
     set(
@@ -142,7 +185,6 @@ pub unsafe fn set_message(callback: retro_environment_t, message: &str, frames: 
             frames,
         },
     )
-    .unwrap_or(false)
 }
 
 /// Requests the frontend to shutdown.
@@ -151,7 +193,7 @@ pub unsafe fn set_message(callback: retro_environment_t, message: &str, frames: 
 #[proc::context(GenericContext)]
 pub unsafe fn shutdown(callback: retro_environment_t) {
     // N/A (NULL)
-    set_ptr(
+    let _ = set_ptr(
         callback,
         RETRO_ENVIRONMENT_SHUTDOWN,
         std::ptr::null() as *const c_void,
@@ -172,14 +214,16 @@ pub unsafe fn shutdown(callback: retro_environment_t) {
 /// as certain games an implementation can play might be
 /// particularly demanding.
 #[proc::context(LoadGameContext)]
-pub unsafe fn set_performance_level(callback: retro_environment_t, level: u8) -> bool {
+pub unsafe fn set_performance_level(
+    callback: retro_environment_t,
+    level: u8,
+) -> Result<(), EnvironmentCallError> {
     // const unsigned *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL,
         level as u32,
     )
-    .unwrap_or(false)
 }
 
 /// Returns the "system" directory of the frontend.
@@ -194,7 +238,9 @@ pub unsafe fn set_performance_level(callback: retro_environment_t, level: u8) ->
 /// This is now discouraged, and if possible, cores should try to
 /// use the new [`get_save_directory()`].
 #[proc::context(GenericContext)]
-pub unsafe fn get_system_directory<'a>(callback: retro_environment_t) -> Option<&'a Path> {
+pub unsafe fn get_system_directory<'a>(
+    callback: retro_environment_t,
+) -> Result<&'a Path, EnvironmentCallError> {
     // const char **
     get_path(callback, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY)
 }
@@ -209,9 +255,9 @@ pub unsafe fn get_system_directory<'a>(callback: retro_environment_t) -> Option<
 pub unsafe fn set_pixel_format<F: Into<retro_pixel_format>>(
     callback: retro_environment_t,
     format: F,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const enum retro_pixel_format *
-    set(callback, RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, format.into()).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, format.into())
 }
 
 /// Sets an array of retro_input_descriptors.
@@ -224,14 +270,13 @@ pub unsafe fn set_pixel_format<F: Into<retro_pixel_format>>(
 pub unsafe fn set_input_descriptors(
     callback: retro_environment_t,
     descriptors: &[retro_input_descriptor],
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_input_descriptor *
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS,
         descriptors.as_ptr(),
     )
-    .unwrap_or(false)
 }
 
 /// Sets a callback function used to notify core about keyboard events.
@@ -239,9 +284,9 @@ pub unsafe fn set_input_descriptors(
 pub unsafe fn set_keyboard_callback(
     callback: retro_environment_t,
     data: retro_keyboard_callback,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_keyboard_callback *
-    set(callback, RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, data).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK, data)
 }
 
 /// Sets an interface which frontend can use to eject and insert
@@ -252,9 +297,9 @@ pub unsafe fn set_keyboard_callback(
 pub unsafe fn set_disk_control_interface(
     callback: retro_environment_t,
     data: retro_disk_control_callback,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_disk_control_callback *
-    set(callback, RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, data).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, data)
 }
 
 /// Sets an interface to let a libretro core render with
@@ -267,9 +312,12 @@ pub unsafe fn set_disk_control_interface(
 /// If HW rendering is used, call either
 /// [`RunContext::draw_hardware_frame`] or [`RunContext::dupe_frame`].
 #[proc::context(LoadGameContext)]
-pub unsafe fn set_hw_render(callback: retro_environment_t, data: retro_hw_render_callback) -> bool {
+pub unsafe fn set_hw_render(
+    callback: retro_environment_t,
+    data: retro_hw_render_callback,
+) -> Result<(), EnvironmentCallError> {
     // struct retro_hw_render_callback *
-    set(callback, RETRO_ENVIRONMENT_SET_HW_RENDER, data).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_HW_RENDER, data)
 }
 
 /// Interface to acquire user-defined information from environment
@@ -282,16 +330,11 @@ pub unsafe fn set_hw_render(callback: retro_environment_t, data: retro_hw_render
 #[proc::context(GenericContext)]
 #[proc::context(OptionsChangedContext)]
 #[allow(clippy::needless_lifetimes)]
-pub unsafe fn get_variable<'a>(callback: retro_environment_t, key: &'a str) -> Option<&'a str> {
-    let key = match CString::new(key) {
-        Ok(key) => key,
-        Err(err) => {
-            #[cfg(feature = "log")]
-            log::error!("{}", err);
-
-            return None;
-        }
-    };
+pub unsafe fn get_variable<'a>(
+    callback: retro_environment_t,
+    key: &'a str,
+) -> Result<&'a str, EnvironmentCallError> {
+    let key = CString::new(key).map_err(StringError::from)?;
 
     let var = retro_variable {
         key: key.as_ptr(),
@@ -299,13 +342,9 @@ pub unsafe fn get_variable<'a>(callback: retro_environment_t, key: &'a str) -> O
     };
 
     // struct retro_variable *
-    if let Some((var, _)) = get_mut(callback, RETRO_ENVIRONMENT_GET_VARIABLE, var) {
-        if !var.value.is_null() {
-            return get_str_from_pointer(var.value as *const c_char);
-        }
-    }
+    let var = get_mut(callback, RETRO_ENVIRONMENT_GET_VARIABLE, var)?;
 
-    None
+    get_str_from_pointer(var.value as *const c_char).map_err(Into::into)
 }
 
 /// Allows an implementation to signal the environment
@@ -360,24 +399,26 @@ pub unsafe fn get_variable<'a>(callback: retro_environment_t, key: &'a str) -> O
 /// Only strings are operated on. The possible values will
 /// generally be displayed and stored as-is by the frontend.
 #[proc::context(SetEnvironmentContext)]
-pub unsafe fn set_variables(callback: retro_environment_t, variables: &[retro_variable]) -> bool {
+pub unsafe fn set_variables(
+    callback: retro_environment_t,
+    variables: &[retro_variable],
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_variable *
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_VARIABLES,
         variables.as_ptr(),
     )
-    .unwrap_or(false)
 }
 
 /// Result is set to [`true`] if some variables are updated by
 /// frontend since last call to [`get_variable`].
 #[proc::context(GenericContext)]
-pub unsafe fn get_variable_update(callback: retro_environment_t) -> bool {
+pub unsafe fn get_variable_update(
+    callback: retro_environment_t,
+) -> Result<(), EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE)
-        .map(|(v, _)| v)
-        .unwrap_or(false)
 }
 
 /// Tell the frontend whether this Core can run without particular game data.
@@ -385,9 +426,12 @@ pub unsafe fn get_variable_update(callback: retro_environment_t) -> bool {
 /// If true, the [`Core`] implementation supports calls to
 /// [`Core::on_load_game`] with [`None`] as argument.
 #[proc::context(SetEnvironmentContext)]
-pub unsafe fn set_support_no_game(callback: retro_environment_t, value: bool) -> bool {
+pub unsafe fn set_support_no_game(
+    callback: retro_environment_t,
+    value: bool,
+) -> Result<(), EnvironmentCallError> {
     // const bool *
-    set(callback, RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, value).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, value)
 }
 
 /// Retrieves the absolute path from where this libretro
@@ -398,7 +442,9 @@ pub unsafe fn set_support_no_game(callback: retro_environment_t, value: bool) ->
 /// Mostly useful in cooperation with [`set_support_no_game`] as assets can
 /// be loaded without ugly hacks.
 #[proc::context(GenericContext)]
-pub unsafe fn get_libretro_path<'a>(callback: retro_environment_t) -> Option<&'a Path> {
+pub unsafe fn get_libretro_path<'a>(
+    callback: retro_environment_t,
+) -> Result<&'a Path, EnvironmentCallError> {
     // const char **
     get_path(callback, RETRO_ENVIRONMENT_GET_LIBRETRO_PATH)
 }
@@ -414,9 +460,9 @@ pub unsafe fn get_libretro_path<'a>(callback: retro_environment_t) -> Option<&'a
 pub unsafe fn set_frame_time_callback(
     callback: retro_environment_t,
     data: retro_frame_time_callback,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_frame_time_callback *
-    set(callback, RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, data).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK, data)
 }
 
 /// Sets an interface which is used to notify a libretro core about audio
@@ -447,9 +493,9 @@ pub unsafe fn set_frame_time_callback(
 pub unsafe fn set_audio_callback(
     callback: retro_environment_t,
     data: retro_audio_callback,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_audio_callback *
-    set(callback, RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK, data).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_AUDIO_CALLBACK, data)
 }
 
 /// Gets an interface which is used by a libretro core to set
@@ -463,9 +509,9 @@ pub unsafe fn set_audio_callback(
 #[proc::context(LoadGameContext)]
 pub unsafe fn get_rumble_interface(
     callback: retro_environment_t,
-) -> Option<retro_rumble_interface> {
+) -> Result<retro_rumble_interface, EnvironmentCallError> {
     // struct retro_rumble_interface *
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE).map(|(v, _)| v)
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE)
 }
 
 /// Gets a bitmask telling which device type are expected to be
@@ -474,14 +520,17 @@ pub unsafe fn get_rumble_interface(
 /// 0 in [`retro_input_state_t`].
 /// Example bitmask: `RetroDevice::JOYPAD | RetroDevice::ANALOG`.
 #[proc::context(RunContext)]
-pub unsafe fn get_input_device_capabilities(callback: retro_environment_t) -> RetroDevice {
-    // I’m not entirely sure why this call returns a 64 bit value when the `RETRO_DEVICE_MASK` allows only eight distinct types.
+pub unsafe fn get_input_device_capabilities(
+    callback: retro_environment_t,
+) -> Result<RetroDevice, EnvironmentCallError> {
     // uint64_t *
-    if let Some((caps, _)) = get::<u64>(callback, RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES) {
-        return RetroDevice::from_bits_truncate(caps as u8);
-    }
+    let caps = get::<u64>(callback, RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES)?;
 
-    RetroDevice::NONE
+    // I’m not entirely sure why this call returns a 64 bit value when the `RETRO_DEVICE_MASK`
+    // allows only eight distinct types.
+    let caps = caps as u8;
+
+    validate_bitflags!(RetroDevice, u8, caps)
 }
 
 /// Gets access to the sensor interface.
@@ -494,9 +543,9 @@ pub unsafe fn get_input_device_capabilities(callback: retro_environment_t) -> Re
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn get_sensor_interface(
     callback: retro_environment_t,
-) -> Option<retro_sensor_interface> {
+) -> Result<retro_sensor_interface, EnvironmentCallError> {
     // const struct retro_sensor_interface *
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE).map(|(v, _)| v)
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE)
 }
 
 /// Gets an interface to a video camera driver.
@@ -525,9 +574,9 @@ pub unsafe fn get_sensor_interface(
 pub unsafe fn get_camera_interface(
     callback: retro_environment_t,
     data: retro_camera_callback,
-) -> Option<retro_camera_callback> {
+) -> Result<retro_camera_callback, EnvironmentCallError> {
     // struct retro_camera_callback *
-    get_mut(callback, RETRO_ENVIRONMENT_GET_CAMERA_INTERFACE, data).map(|(v, _)| v)
+    get_mut(callback, RETRO_ENVIRONMENT_GET_CAMERA_INTERFACE, data)
 }
 
 /// Gets an interface for logging. This is useful for
@@ -540,21 +589,20 @@ pub unsafe fn get_camera_interface(
 #[proc::context(GenericContext)]
 pub unsafe fn get_log_callback(
     callback: retro_environment_t,
-) -> Result<Option<retro_log_callback>, Box<dyn std::error::Error>> {
+) -> Result<retro_log_callback, EnvironmentCallError> {
     // struct retro_log_callback *
-    match get_unchecked(callback, RETRO_ENVIRONMENT_GET_LOG_INTERFACE) {
-        Some((callback, true)) => Ok(Some(callback)),
-        _ => Err("Failed to query log callback".into()),
-    }
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_LOG_INTERFACE)
 }
 
 /// Gets an interface for performance counters. This is useful
 /// for performance logging in a cross-platform way and for detecting
 /// architecture-specific features, such as SIMD support.
 #[proc::context(GenericContext)]
-pub unsafe fn get_perf_interface(callback: retro_environment_t) -> Option<retro_perf_callback> {
+pub unsafe fn get_perf_interface(
+    callback: retro_environment_t,
+) -> Result<retro_perf_callback, EnvironmentCallError> {
     // struct retro_perf_callback *
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_PERF_INTERFACE).map(|(v, _)| v)
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_PERF_INTERFACE)
 }
 
 /// Gets access to the location interface.
@@ -564,9 +612,9 @@ pub unsafe fn get_perf_interface(callback: retro_environment_t) -> Option<retro_
 #[proc::context(GenericContext)]
 pub unsafe fn get_location_callback(
     callback: retro_environment_t,
-) -> Option<retro_location_callback> {
+) -> Result<retro_location_callback, EnvironmentCallError> {
     // struct retro_location_callback *
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_LOCATION_INTERFACE).map(|(v, _)| v)
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_LOCATION_INTERFACE)
 }
 
 /// Returns the "core assets" directory of the frontend.
@@ -577,7 +625,9 @@ pub unsafe fn get_location_callback(
 /// If so, no such directory is defined,
 /// and it's up to the implementation to find a suitable directory.
 #[proc::context(GenericContext)]
-pub unsafe fn get_core_assets_directory<'a>(callback: retro_environment_t) -> Option<&'a Path> {
+pub unsafe fn get_core_assets_directory<'a>(
+    callback: retro_environment_t,
+) -> Result<&'a Path, EnvironmentCallError> {
     // const char **
     get_path(callback, RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY)
 }
@@ -595,7 +645,9 @@ pub unsafe fn get_core_assets_directory<'a>(callback: retro_environment_t) -> Op
 /// files. Cores that need to be backwards-compatible can still check
 /// [`get_system_directory`].
 #[proc::context(GenericContext)]
-pub unsafe fn get_save_directory<'a>(callback: retro_environment_t) -> Option<&'a Path> {
+pub unsafe fn get_save_directory<'a>(
+    callback: retro_environment_t,
+) -> Result<&'a Path, EnvironmentCallError> {
     // const char **
     get_path(callback, RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY)
 }
@@ -635,9 +687,9 @@ pub unsafe fn get_save_directory<'a>(callback: retro_environment_t) -> Option<&'
 pub unsafe fn set_system_av_info(
     callback: retro_environment_t,
     av_info: retro_system_av_info,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_system_av_info *
-    set(callback, RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, av_info).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, av_info)
 }
 
 /// Allows a libretro core to announce support for the
@@ -652,9 +704,9 @@ pub unsafe fn set_system_av_info(
 pub unsafe fn set_proc_address_callback(
     callback: retro_environment_t,
     data: retro_get_proc_address_interface,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_get_proc_address_interface *
-    set(callback, RETRO_ENVIRONMENT_SET_PROC_ADDRESS_CALLBACK, data).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_PROC_ADDRESS_CALLBACK, data)
 }
 
 /// This environment call introduces the concept of libretro "subsystems".
@@ -677,14 +729,13 @@ pub unsafe fn set_proc_address_callback(
 pub unsafe fn set_subsystem_info(
     callback: retro_environment_t,
     data: &[retro_subsystem_info],
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_subsystem_info *
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO,
         data.as_ptr(),
     )
-    .unwrap_or(false)
 }
 
 /// This environment call lets a libretro core tell the frontend
@@ -727,14 +778,13 @@ pub unsafe fn set_subsystem_info(
 pub unsafe fn set_controller_info(
     callback: retro_environment_t,
     data: &[retro_controller_info],
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_controller_info *
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_CONTROLLER_INFO,
         data.as_ptr(),
     )
-    .unwrap_or(false)
 }
 
 /// This environment call lets a libretro core tell the frontend
@@ -750,9 +800,12 @@ pub unsafe fn set_controller_info(
 #[proc::context(InitContext)]
 #[proc::context(LoadGameContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn set_memory_maps(callback: retro_environment_t, data: retro_memory_map) -> bool {
+pub unsafe fn set_memory_maps(
+    callback: retro_environment_t,
+    data: retro_memory_map,
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_memory_map *
-    set(callback, RETRO_ENVIRONMENT_SET_MEMORY_MAPS, data).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_MEMORY_MAPS, data)
 }
 
 /// Sets a new game_geometry structure.
@@ -776,9 +829,9 @@ pub unsafe fn set_memory_maps(callback: retro_environment_t, data: retro_memory_
 pub unsafe fn set_game_geometry(
     callback: retro_environment_t,
     geometry: retro_game_geometry,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_game_geometry *
-    set(callback, RETRO_ENVIRONMENT_SET_GEOMETRY, geometry).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_GEOMETRY, geometry)
 }
 
 /// Returns the specified username of the frontend, if specified by the user.
@@ -788,34 +841,32 @@ pub unsafe fn set_game_geometry(
 /// If this environment callback is used by a core that requires a valid username,
 /// a default username should be specified by the core.
 #[proc::context(GenericContext)]
-pub unsafe fn get_username<'a>(callback: retro_environment_t) -> Option<&'a str> {
+pub unsafe fn get_username<'a>(
+    callback: retro_environment_t,
+) -> Result<&'a str, EnvironmentCallError> {
     let ptr: *mut c_void = std::ptr::null_mut();
 
     // const char **
-    if let Some((ptr, _)) = get_mut(callback, RETRO_ENVIRONMENT_GET_USERNAME, ptr) {
-        if ptr.is_null() {
-            return None;
-        }
+    let ptr = get_mut(callback, RETRO_ENVIRONMENT_GET_USERNAME, ptr)?;
 
-        return get_str_from_pointer(ptr as *const c_char);
-    }
-
-    None
+    get_str_from_pointer(ptr as *const c_char).map_err(Into::into)
 }
 
 /// Returns the language of the frontend, if specified by the user.
 /// It can be used by the core for localization purposes.
 #[proc::context(GenericContext)]
-pub unsafe fn get_language(callback: retro_environment_t) -> Option<retro_language> {
+pub unsafe fn get_language(
+    callback: retro_environment_t,
+) -> Result<retro_language, EnvironmentCallError> {
     // unsigned *
-    if let Some((id, _)) = get::<u32>(callback, RETRO_ENVIRONMENT_GET_LANGUAGE) {
-        if id < retro_language::RETRO_LANGUAGE_LAST as u32 {
-            // This is safe because all values from 0 to RETRO_LANGUAGE_LAST have defined values
-            return Some(std::mem::transmute(id));
-        }
+    let id = get::<u32>(callback, RETRO_ENVIRONMENT_GET_LANGUAGE)?;
+
+    if id < retro_language::RETRO_LANGUAGE_LAST as u32 {
+        // This is safe because all values from 0 to RETRO_LANGUAGE_LAST have defined values
+        return Ok(std::mem::transmute(id));
     }
 
-    None
+    Err(EnvironmentCallError::InvalidEnumValue(id.to_string()))
 }
 
 /// Returns a preallocated framebuffer which the core can use for rendering
@@ -850,14 +901,13 @@ pub unsafe fn get_language(callback: retro_environment_t) -> Option<retro_langua
 pub unsafe fn get_current_software_framebuffer(
     callback: retro_environment_t,
     data: retro_framebuffer,
-) -> Option<retro_framebuffer> {
+) -> Result<retro_framebuffer, EnvironmentCallError> {
     // struct retro_framebuffer *
     get_mut(
         callback,
         RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER,
         data,
     )
-    .map(|(v, _)| v)
 }
 
 /// Returns an API specific rendering interface for accessing API specific data.
@@ -874,14 +924,21 @@ pub unsafe fn get_current_software_framebuffer(
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn get_hw_render_interface(
     callback: retro_environment_t,
-) -> Option<retro_hw_render_interface> {
+) -> Result<retro_hw_render_interface, EnvironmentCallError> {
     // const struct retro_hw_render_interface **
-    get_mut(
+    let ptr: *const retro_hw_render_interface = get_mut(
         callback,
         RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE,
         std::ptr::null(),
-    )
-    .map(|(v, _)| *v)
+    )?;
+
+    if ptr.is_null() {
+        return Err(EnvironmentCallError::NullPointer(
+            "retro_hw_render_interface",
+        ));
+    }
+
+    Ok(*ptr)
 }
 
 /// See [`get_hw_render_interface`].
@@ -890,14 +947,21 @@ pub unsafe fn get_hw_render_interface(
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn get_hw_render_interface_vulkan(
     callback: retro_environment_t,
-) -> Option<retro_hw_render_interface_vulkan> {
+) -> Result<retro_hw_render_interface_vulkan, EnvironmentCallError> {
     // const struct retro_hw_render_interface_vulkan **
-    get_mut(
+    let ptr: *const retro_hw_render_interface_vulkan = get_mut(
         callback,
         RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE,
-        std::ptr::null::<retro_hw_render_interface_vulkan>(),
-    )
-    .map(|(v, _)| (*v).clone())
+        std::ptr::null(),
+    )?;
+
+    if ptr.is_null() {
+        return Err(EnvironmentCallError::NullPointer(
+            "retro_hw_render_interface_vulkan",
+        ));
+    }
+
+    Ok((*ptr).clone())
 }
 
 /// If true, the Core implementation supports achievements.
@@ -906,9 +970,12 @@ pub unsafe fn get_hw_render_interface_vulkan(
 /// or via [`Core::get_memory_data`] / [`Core::get_memory_size`].
 #[proc::context(InitContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn set_support_achievements(callback: retro_environment_t, value: bool) -> bool {
+pub unsafe fn set_support_achievements(
+    callback: retro_environment_t,
+    value: bool,
+) -> Result<(), EnvironmentCallError> {
     // const bool *
-    set(callback, RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, value).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, value)
 }
 
 /// Sets an interface which lets the libretro core negotiate with frontend how a context is created.
@@ -920,14 +987,13 @@ pub unsafe fn set_support_achievements(callback: retro_environment_t, value: boo
 pub unsafe fn set_hw_render_context_negotiation_interface(
     callback: retro_environment_t,
     interface: &retro_hw_render_context_negotiation_interface,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_hw_render_context_negotiation_interface *
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE,
         interface,
     )
-    .unwrap_or(false)
 }
 
 /// Sets quirk flags associated with serialization.
@@ -939,14 +1005,13 @@ pub unsafe fn set_hw_render_context_negotiation_interface(
 pub unsafe fn set_serialization_quirks(
     callback: retro_environment_t,
     quirks: SerializationQuirks,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // uint64_t *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS,
         quirks.bits() as u64,
     )
-    .unwrap_or(false)
 }
 
 /// The frontend will try to use a 'shared' hardware context (mostly applicable
@@ -959,14 +1024,15 @@ pub unsafe fn set_serialization_quirks(
 /// being used.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn set_hw_shared_context(callback: retro_environment_t) -> bool {
+pub unsafe fn set_hw_shared_context(
+    callback: retro_environment_t,
+) -> Result<(), EnvironmentCallError> {
     // N/A (null) *
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT,
         std::ptr::null() as *const c_void,
     )
-    .unwrap_or(false)
 }
 
 /// Gets access to the VFS interface.
@@ -979,17 +1045,19 @@ pub unsafe fn set_hw_shared_context(callback: retro_environment_t) -> bool {
 pub fn get_vfs_interface(
     callback: retro_environment_t,
     data: retro_vfs_interface_info,
-) -> Option<retro_vfs_interface_info> {
+) -> Result<retro_vfs_interface_info, EnvironmentCallError> {
     // struct retro_vfs_interface_info *
-    get_mut(callback, RETRO_ENVIRONMENT_GET_VFS_INTERFACE, data).map(|(v, _)| v)
+    get_mut(callback, RETRO_ENVIRONMENT_GET_VFS_INTERFACE, data)
 }
 
 /// Gets an interface which is used by a libretro core to set state of LEDs.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub fn get_led_interface(callback: retro_environment_t) -> Option<retro_led_interface> {
+pub fn get_led_interface(
+    callback: retro_environment_t,
+) -> Result<retro_led_interface, EnvironmentCallError> {
     // struct retro_led_interface *
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_LED_INTERFACE).map(|(v, _)| v)
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_LED_INTERFACE)
 }
 
 /// Tells the core if the frontend wants audio or video.
@@ -1000,31 +1068,33 @@ pub fn get_led_interface(callback: retro_environment_t) -> Option<retro_led_inte
 /// See [`AudioVideoEnable`] for descriptions of the flags.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn get_audio_video_enable(callback: retro_environment_t) -> AudioVideoEnable {
+pub unsafe fn get_audio_video_enable(
+    callback: retro_environment_t,
+) -> Result<AudioVideoEnable, EnvironmentCallError> {
     // int *
-    if let Some((info, _)) = get(callback, RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE) {
-        return AudioVideoEnable::from_bits_truncate(info);
-    }
+    let info = get(callback, RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE)?;
 
-    AudioVideoEnable::empty()
+    validate_bitflags!(AudioVideoEnable, u32, info)
 }
 
 /// Returns a MIDI interface that can be used for raw data I/O.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub fn get_midi_interface(callback: retro_environment_t) -> Option<retro_midi_interface> {
+pub fn get_midi_interface(
+    callback: retro_environment_t,
+) -> Result<retro_midi_interface, EnvironmentCallError> {
     // struct retro_midi_interface **
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_MIDI_INTERFACE).map(|(v, _)| v)
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_MIDI_INTERFACE)
 }
 
 /// Boolean value that indicates whether or not the frontend is in fastforwarding mode.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn get_fastforwarding(callback: retro_environment_t) -> bool {
+pub unsafe fn get_fastforwarding(
+    callback: retro_environment_t,
+) -> Result<(), EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_FASTFORWARDING)
-        .map(|(v, _)| v)
-        .unwrap_or(false)
 }
 
 /// Float value that lets us know what target refresh rate
@@ -1034,9 +1104,11 @@ pub unsafe fn get_fastforwarding(callback: retro_environment_t) -> bool {
 /// refresh rate/framerate.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn get_target_refresh_rate(callback: retro_environment_t) -> Option<f32> {
+pub unsafe fn get_target_refresh_rate(
+    callback: retro_environment_t,
+) -> Result<f32, EnvironmentCallError> {
     // float *
-    get(callback, RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE).map(|(v, _)| v)
+    get(callback, RETRO_ENVIRONMENT_GET_TARGET_REFRESH_RATE)
 }
 
 /// Boolean value that indicates whether or not the frontend supports
@@ -1049,9 +1121,11 @@ pub unsafe fn get_target_refresh_rate(callback: retro_environment_t) -> Option<f
 /// It will return a bitmask of all the digital buttons.
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn get_input_bitmasks(callback: retro_environment_t) -> bool {
+pub unsafe fn get_input_bitmasks(
+    callback: retro_environment_t,
+) -> Result<(), EnvironmentCallError> {
     // bool *
-    // get(callback, RETRO_ENVIRONMENT_GET_INPUT_BITMASKS).map(|(v, _)| v).unwrap_or(false)
+    // get(callback, RETRO_ENVIRONMENT_GET_INPUT_BITMASKS)
 
     // RetroArch uses the callback’s return value instead
     set_ptr(
@@ -1059,7 +1133,6 @@ pub unsafe fn get_input_bitmasks(callback: retro_environment_t) -> bool {
         RETRO_ENVIRONMENT_GET_INPUT_BITMASKS,
         std::ptr::null() as *const c_void,
     )
-    .unwrap_or(false)
 }
 
 /// The returned value is the API version number of the core options
@@ -1087,9 +1160,7 @@ pub unsafe fn get_input_bitmasks(callback: retro_environment_t) -> bool {
 #[proc::context(GenericContext)]
 pub unsafe fn get_core_options_version(callback: retro_environment_t) -> u32 {
     // unsigned *
-    get(callback, RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION)
-        .map(|(v, _)| v)
-        .unwrap_or(0)
+    get(callback, RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION).unwrap_or(0)
 }
 
 /// Checks whether the frontend supports the [`set_core_options`] interface.
@@ -1168,14 +1239,21 @@ pub unsafe fn supports_set_core_options_v2(callback: retro_environment_t) -> boo
 pub unsafe fn set_core_options(
     callback: retro_environment_t,
     options: &[retro_core_option_definition],
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
+    if !supports_set_core_options(callback) {
+        let supported = get_core_options_version(callback);
+
+        return Err(EnvironmentCallError::Unsupported(
+            format!("set_core_options() requires at least API version 1, but the frontend reports support for version {supported}."),
+        ));
+    }
+
     // const struct retro_core_option_definition **
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_CORE_OPTIONS,
         options.as_ptr(),
     )
-    .unwrap_or(false)
 }
 
 /// Allows an implementation to signal the environment
@@ -1365,14 +1443,27 @@ pub unsafe fn set_core_options(
 pub unsafe fn set_core_options_v2(
     callback: retro_environment_t,
     options: &retro_core_options_v2,
-) -> bool {
+) -> Result<bool, EnvironmentCallError> {
+    if !supports_set_core_options_v2(callback) {
+        let supported = get_core_options_version(callback);
+
+        return Err(EnvironmentCallError::Unsupported(
+            format!("set_core_options_v2() requires at least API version 2, but the frontend reports support for version {supported}."),
+        ));
+    }
+
     // const struct retro_core_options_v2 *
-    set_ptr(
+    let result = set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2,
         options as *const _,
-    )
-    .unwrap_or(false)
+    );
+
+    match result {
+        Ok(()) => Ok(true),
+        Err(EnvironmentCallError::Failure) => Ok(false),
+        Err(err) => Err(err),
+    }
 }
 
 /// Allows an implementation to signal the environment
@@ -1420,9 +1511,17 @@ pub unsafe fn set_core_options_v2(
 pub unsafe fn set_core_options_intl(
     callback: retro_environment_t,
     options: retro_core_options_intl,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
+    if !supports_set_core_options(callback) {
+        let supported = get_core_options_version(callback);
+
+        return Err(EnvironmentCallError::Unsupported(
+            format!("set_core_options_intl() requires at least API version 1, but the frontend reports support for version {supported}."),
+        ));
+    }
+
     // const struct retro_core_options_intl *
-    set(callback, RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL, options).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL, options)
 }
 
 /// Allows an implementation to signal the environment
@@ -1486,14 +1585,27 @@ pub unsafe fn set_core_options_intl(
 pub unsafe fn set_core_options_v2_intl(
     callback: retro_environment_t,
     options: retro_core_options_v2_intl,
-) -> bool {
+) -> Result<bool, EnvironmentCallError> {
+    if !supports_set_core_options_v2(callback) {
+        let supported = get_core_options_version(callback);
+
+        return Err(EnvironmentCallError::Unsupported(
+            format!("set_core_options_v2_intl() requires at least API version 2, but the frontend reports support for version {supported}."),
+        ));
+    }
+
     // const struct retro_core_options_v2_intl *
-    set(
+    let result = set(
         callback,
         RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL,
         options,
-    )
-    .unwrap_or(false)
+    );
+
+    match result {
+        Ok(()) => Ok(true),
+        Err(EnvironmentCallError::Failure) => Ok(false),
+        Err(err) => Err(err),
+    }
 }
 
 /// Allows an implementation to signal the environment to show
@@ -1515,14 +1627,13 @@ pub unsafe fn set_core_options_v2_intl(
 pub unsafe fn set_core_options_display(
     callback: retro_environment_t,
     options: retro_core_option_display,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // struct retro_core_option_display *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY,
         options,
     )
-    .unwrap_or(false)
 }
 
 /// Allows an implementation to ask frontend preferred hardware
@@ -1531,11 +1642,17 @@ pub unsafe fn set_core_options_display(
 ///
 /// 'data' points to an unsigned variable
 #[proc::context(GenericContext)]
-pub unsafe fn get_preferred_hw_render(callback: retro_environment_t) -> u32 {
+pub unsafe fn get_preferred_hw_render(
+    callback: retro_environment_t,
+) -> Result<retro_hw_context_type, EnvironmentCallError> {
     // unsigned *
-    get(callback, RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER)
-        .map(|(v, _)| v)
-        .unwrap_or(0)
+
+    let value = get::<retro_hw_context_type_REPR_TYPE>(
+        callback,
+        RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER,
+    )?;
+
+    retro_hw_context_type::try_from(value).map_err(Into::into)
 }
 
 /// Unsigned value is the API version number of the disk control
@@ -1562,7 +1679,6 @@ pub unsafe fn get_disk_control_interface_version(callback: retro_environment_t) 
         callback,
         RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION,
     )
-    .map(|(v, _)| v)
     .unwrap_or(0)
 }
 
@@ -1576,14 +1692,13 @@ pub unsafe fn get_disk_control_interface_version(callback: retro_environment_t) 
 pub unsafe fn set_disk_control_ext_interface(
     callback: retro_environment_t,
     data: retro_disk_control_ext_callback,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_disk_control_ext_callback *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE,
         data,
     )
-    .unwrap_or(false)
 }
 
 /// The returned value is the API version number of the message
@@ -1603,9 +1718,7 @@ pub unsafe fn set_disk_control_ext_interface(
 #[proc::context(GenericContext)]
 pub unsafe fn get_message_interface_version(callback: retro_environment_t) -> u32 {
     // unsigned *
-    get(callback, RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION)
-        .map(|(v, _)| v)
-        .unwrap_or(0)
+    get(callback, RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION).unwrap_or(0)
 }
 
 /// Sets a message to be displayed in an implementation-specific
@@ -1625,16 +1738,8 @@ pub unsafe fn set_message_ext(
     target: retro_message_target,
     type_: retro_message_type,
     progress: MessageProgress,
-) -> bool {
-    let msg = match CString::new(message) {
-        Ok(message) => message,
-        Err(err) => {
-            #[cfg(feature = "log")]
-            log::error!("{}", err);
-
-            return false;
-        }
-    };
+) -> Result<(), EnvironmentCallError> {
+    let msg = CString::new(message).map_err(StringError::from)?;
 
     // const struct retro_message_ext *
     set(
@@ -1650,7 +1755,6 @@ pub unsafe fn set_message_ext(
             progress: progress.as_i8(),
         },
     )
-    .unwrap_or(false)
 }
 
 /// The first returned value is the number of active input devices
@@ -1680,14 +1784,13 @@ pub unsafe fn get_input_max_users(callback: retro_environment_t) -> (u32, bool) 
 pub unsafe fn set_audio_buffer_status_callback(
     callback: retro_environment_t,
     data: retro_audio_buffer_status_callback,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_audio_buffer_status_callback *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK,
         data,
     )
-    .unwrap_or(false)
 }
 
 /// Sets minimum frontend audio latency in milliseconds.
@@ -1716,26 +1819,29 @@ pub unsafe fn set_audio_buffer_status_callback(
 /// callbacks happening after this call within the same [`Core::on_run`]
 /// call will target the newly initialized driver.
 #[proc::context(RunContext)]
-pub unsafe fn set_minimum_audio_latency(callback: retro_environment_t, latency: u32) -> bool {
+pub unsafe fn set_minimum_audio_latency(
+    callback: retro_environment_t,
+    latency: u32,
+) -> Result<(), EnvironmentCallError> {
     // const unsigned *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY,
         latency,
     )
-    .unwrap_or(false)
 }
 
 /// Checks whether the frontend supports the [`set_fastforwarding_override`] interface.
 #[proc::context(GenericContext)]
-pub unsafe fn supports_fastforwarding_override(callback: retro_environment_t) -> bool {
+pub unsafe fn supports_fastforwarding_override(
+    callback: retro_environment_t,
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_fastforwarding_override *
     set_ptr(
         callback,
         RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE,
         std::ptr::null() as *const c_void,
     )
-    .unwrap_or(false)
 }
 
 /// Used by a libretro core to override the current
@@ -1744,14 +1850,13 @@ pub unsafe fn supports_fastforwarding_override(callback: retro_environment_t) ->
 pub unsafe fn set_fastforwarding_override(
     callback: retro_environment_t,
     value: retro_fastforwarding_override,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_fastforwarding_override *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE,
         value,
     )
-    .unwrap_or(false)
 }
 
 ///  Allows an implementation to override 'global' content
@@ -1828,9 +1933,9 @@ pub unsafe fn set_fastforwarding_override(
 pub unsafe fn set_content_info_override(
     callback: retro_environment_t,
     value: retro_system_content_info_override,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_system_content_info_override *
-    set(callback, RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE, value).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE, value)
 }
 
 /// Allows an implementation to fetch extended game
@@ -1869,13 +1974,11 @@ pub unsafe fn set_content_info_override(
 ///   [`Core::on_load_game_special`]
 #[proc::context(LoadGameContext)]
 #[proc::context(LoadGameSpecialContext)]
-pub unsafe fn get_game_info_ext(callback: retro_environment_t) -> Option<retro_game_info_ext> {
+pub unsafe fn get_game_info_ext(
+    callback: retro_environment_t,
+) -> Result<retro_game_info_ext, EnvironmentCallError> {
     // const struct retro_game_info_ext **
-    if let Some((v, true)) = get_unchecked(callback, RETRO_ENVIRONMENT_GET_GAME_INFO_EXT) {
-        Some(v)
-    } else {
-        None
-    }
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_GAME_INFO_EXT)
 }
 
 /// Allows a frontend to signal that a core must update
@@ -1889,14 +1992,13 @@ pub unsafe fn get_game_info_ext(callback: retro_environment_t) -> Option<retro_g
 pub unsafe fn set_core_options_update_display_callback(
     callback: retro_environment_t,
     data: retro_core_options_update_display_callback,
-) -> bool {
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_core_options_update_display_callback *
     set(
         callback,
         RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK,
         data,
     )
-    .unwrap_or(false)
 }
 
 /// Allows an implementation to notify the frontend
@@ -1921,18 +2023,23 @@ pub unsafe fn set_core_options_update_display_callback(
 /// implementation may therefore pass `NULL` in order
 /// to test whether the callback is supported.
 #[proc::context(GenericContext)]
-pub unsafe fn set_variable(callback: retro_environment_t, value: retro_variable) -> bool {
+pub unsafe fn set_variable(
+    callback: retro_environment_t,
+    value: retro_variable,
+) -> Result<(), EnvironmentCallError> {
     // const struct retro_variable *
-    set(callback, RETRO_ENVIRONMENT_SET_VARIABLE, value).unwrap_or(false)
+    set(callback, RETRO_ENVIRONMENT_SET_VARIABLE, value)
 }
 
 /// Allows an implementation to get details on the actual rate
 /// the frontend is attempting to call [`Core::on_run`].
 #[proc::context(GenericContext)]
 #[proc::unstable(feature = "env-commands")]
-pub unsafe fn get_throttle_state(callback: retro_environment_t) -> Option<retro_throttle_state> {
+pub unsafe fn get_throttle_state(
+    callback: retro_environment_t,
+) -> Result<retro_throttle_state, EnvironmentCallError> {
     // struct retro_throttle_state *
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_THROTTLE_STATE).map(|(v, _)| v)
+    get_unchecked(callback, RETRO_ENVIRONMENT_GET_THROTTLE_STATE)
 }
 
 /// Tells the core about the context the frontend is asking for savestate.
@@ -1941,14 +2048,13 @@ pub unsafe fn get_throttle_state(callback: retro_environment_t) -> Option<retro_
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn get_savestate_context(
     callback: retro_environment_t,
-) -> Option<retro_savestate_context> {
+) -> Result<retro_savestate_context, EnvironmentCallError> {
     // int *
 
-    if let Some((value, _)) =
-        get::<retro_savestate_context_REPR_TYPE>(callback, RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT)
-    {
-        return retro_savestate_context::try_from(value).ok();
-    }
+    let value = get::<retro_savestate_context_REPR_TYPE>(
+        callback,
+        RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT,
+    )?;
 
-    None
+    retro_savestate_context::try_from(value).map_err(Into::into)
 }

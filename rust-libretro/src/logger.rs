@@ -1,8 +1,11 @@
 //! [`log::Log`] implementation using the libretro logging interface.
-use super::*;
 use env_logger::filter::{Builder as FilterBuilder, Filter};
 use log::{Level, Metadata, Record};
-use std::io::Write;
+use rust_libretro_sys::{retro_log_callback, retro_log_level};
+use std::{
+    ffi::{c_char, CString},
+    io::Write,
+};
 
 pub struct RetroLogger {
     callback: retro_log_callback,

@@ -80,12 +80,14 @@ impl Core for ExampleCore {
             return;
         }
 
-        ctx.set_support_no_game(true);
+        ctx.set_support_no_game(true)
+            .expect("telling the frontend that we can run without content to succeed");
     }
 
     fn on_init(&mut self, ctx: &mut InitContext) {
         let gctx: GenericContext = ctx.into();
-        gctx.set_input_descriptors(INPUT_DESCRIPTORS);
+        gctx.set_input_descriptors(INPUT_DESCRIPTORS)
+            .expect("setting input descriptors to succeed");
     }
 
     fn on_get_av_info(&mut self, _ctx: &mut GetAvInfoContext) -> retro_system_av_info {
@@ -108,27 +110,37 @@ impl Core for ExampleCore {
         &mut self,
         _info: Option<retro_game_info>,
         ctx: &mut LoadGameContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        ctx.set_pixel_format(PixelFormat::XRGB8888);
-        ctx.set_performance_level(0);
-        ctx.enable_frame_time_callback((1000000.0f64 / 60.0).round() as retro_usec_t);
+    ) -> rust_libretro::core::Result<()> {
+        ctx.set_pixel_format(PixelFormat::XRGB8888).map_err(|_| {
+            rust_libretro::anyhow::anyhow!("Required pixel format “XRGB8888” is not supported")
+        })?;
+
+        let _ = ctx.set_performance_level(0);
+
+        if let Err(err) =
+            ctx.enable_frame_time_callback((1000000.0f64 / 60.0).round() as retro_usec_t)
+        {
+            log::error!("Failed to enable frame time callback: {}", err);
+        }
 
         let gctx: GenericContext = ctx.into();
-        gctx.enable_audio_callback();
+        if let Err(err) = gctx.enable_audio_callback() {
+            log::error!("Failed to enable audio callback: {}", err);
+        }
 
         Ok(())
     }
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
         match ctx.get_variable("foo_option_1") {
-            Some("true") => self.option_1 = true,
-            Some("false") => self.option_1 = false,
+            Ok("true") => self.option_1 = true,
+            Ok("false") => self.option_1 = false,
             _ => (),
         }
 
         match ctx.get_variable("foo_option_2") {
-            Some("true") => self.option_2 = true,
-            Some("false") => self.option_2 = false,
+            Ok("true") => self.option_2 = true,
+            Ok("false") => self.option_2 = false,
             _ => (),
         }
     }

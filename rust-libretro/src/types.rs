@@ -1,6 +1,7 @@
 //! Rust versions of libretro data structures.
-use super::*;
-use std::collections::HashMap;
+use crate::proc;
+use rust_libretro_sys::*;
+use std::{collections::HashMap, ffi::CString};
 
 /// Static information about the [`Core`] implementation.
 #[derive(Debug, Default)]
@@ -124,6 +125,7 @@ bitflags::bitflags! {
         const POINTER = (1 << RETRO_DEVICE_POINTER);
     }
 }
+
 #[test]
 fn retro_device_struct_size() {
     assert_eq!(
@@ -195,6 +197,7 @@ bitflags::bitflags! {
 }
 
 /// Used in [`environment::set_message_ext`] to signal some ongoing progress.
+#[derive(Debug, Copy, Clone)]
 pub enum MessageProgress {
     /// The message is unmetered or the progress cannot be determined.
     Indeterminate,
@@ -225,6 +228,7 @@ impl MessageProgress {
 }
 
 /// Screen rotation in degrees
+#[derive(Debug, Copy, Clone)]
 pub enum Rotation {
     None,
 
@@ -414,6 +418,7 @@ pub mod unstable {
     }
 
     #[repr(i32)]
+    #[derive(Debug, Copy, Clone)]
     pub enum VfsSeekPosition {
         Start = RETRO_VFS_SEEK_POSITION_START as i32,
         Current = RETRO_VFS_SEEK_POSITION_CURRENT as i32,
@@ -440,6 +445,30 @@ pub mod unstable {
             const UNCACHED = 0;
             const CACHED = RETRO_MEMORY_TYPE_CACHED;
         }
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    pub enum VfsMkdirStatus {
+        Success,
+        Exists,
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    pub enum VfsReadDirStatus {
+        Success,
+        AlreadyOnLastEntry,
+    }
+
+    #[repr(u32)]
+    #[derive(Debug, Copy, Clone)]
+    pub enum SensorType {
+        AccelerometerX = RETRO_SENSOR_ACCELEROMETER_X,
+        AccelerometerY = RETRO_SENSOR_ACCELEROMETER_Y,
+        AccelerometerZ = RETRO_SENSOR_ACCELEROMETER_Z,
+        GyroscopeX = RETRO_SENSOR_GYROSCOPE_X,
+        GyroscopeY = RETRO_SENSOR_GYROSCOPE_Y,
+        GyroscopeZ = RETRO_SENSOR_GYROSCOPE_Z,
+        Illuminance = RETRO_SENSOR_ILLUMINANCE,
     }
 
     // TODO: Can we get rid of the raw pointer and PhantomData in an ergonomic way?

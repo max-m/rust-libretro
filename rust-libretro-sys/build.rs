@@ -26,7 +26,20 @@ fn libretro_h() -> bindgen::Builder {
 
         fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
             match info.name {
-                "retro_savestate_context" => vec!["TryFromPrimitive".to_owned()],
+                "retro_language"
+                // | "retro_key"
+                // | "retro_mod"
+                | "retro_hw_render_interface_type"
+                | "retro_hw_render_context_negotiation_interface_type"
+                | "retro_log_level"
+                | "retro_sensor_action"
+                | "retro_camera_buffer"
+                | "retro_rumble_effect"
+                | "retro_hw_context_type"
+                | "retro_pixel_format"
+                | "retro_savestate_context"
+                | "retro_message_target"
+                | "retro_message_type" => vec!["TryFromPrimitive".to_owned()],
                 _ => Vec::with_capacity(0),
             }
         }
