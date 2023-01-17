@@ -174,7 +174,7 @@ impl TestCore {
             api_version: VK_API_VERSION,
         };
 
-        return &INFO;
+        &INFO
     }
 
     fn find_memory_type_from_requirements(
@@ -184,13 +184,12 @@ impl TestCore {
     ) -> u32 {
         let props = &self.vk.memory_properties;
         for i in 0..vk::MAX_MEMORY_TYPES {
-            if (device_requirements & (1 << i)) != 0 {
-                if props.memory_types[i]
+            if (device_requirements & (1 << i)) != 0
+                && props.memory_types[i]
                     .property_flags
                     .contains(host_requirements)
-                {
-                    return i as u32;
-                }
+            {
+                return i as u32;
             }
         }
 
@@ -911,27 +910,25 @@ impl Core for TestCore {
             return;
         }
 
-        ctx.set_support_no_game(true);
+        ctx.set_support_no_game(true)
+            .expect("telling the frontend that we can run without content to succeed");
     }
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
-        match ctx.get_variable("testvulkan_resolution") {
-            Some(value) => {
-                let dimensions = value
-                    .split('x')
-                    .map(|x| x.parse::<u16>().unwrap())
-                    .collect::<Vec<_>>();
+        if let Ok(value) = ctx.get_variable("testvulkan_resolution") {
+            let dimensions = value
+                .split('x')
+                .map(|x| x.parse::<u16>().unwrap())
+                .collect::<Vec<_>>();
 
-                let resolution = (dimensions[0], dimensions[1]);
-                let reinitialize = resolution != self.resolution;
-                self.resolution = resolution;
+            let resolution = (dimensions[0], dimensions[1]);
+            let reinitialize = resolution != self.resolution;
+            self.resolution = resolution;
 
-                if reinitialize {
-                    self.deinit();
-                    self.init();
-                }
+            if reinitialize {
+                self.deinit();
+                self.init();
             }
-            _ => (),
         }
     }
 
@@ -939,28 +936,25 @@ impl Core for TestCore {
         &mut self,
         _game: Option<retro_game_info>,
         ctx: &mut LoadGameContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> rust_libretro::core::Result<()> {
         unsafe {
-            let enabled = ctx.enable_hw_render(
+            ctx.enable_hw_render(
                 retro_hw_context_type::RETRO_HW_CONTEXT_VULKAN,
                 false,
                 VK_API_VERSION,
                 0,
                 false,
-            );
+            )
+            .map_err(|err| anyhow::anyhow!("Failed to enable Vulkan context: {err}"))?;
 
-            if !enabled {
-                return Err("Failed to enable Vulkan context".into());
-            }
-
-            let success = ctx.enable_hw_render_negotiation_interface_vulkan(
+            let result = ctx.enable_hw_render_negotiation_interface_vulkan(
                 Some(Self::get_application_info),
                 None,
                 None,
             );
 
-            if !success {
-                log::warn!("Failed to set hardware context negotiation interface");
+            if let Err(err) = result {
+                log::warn!("Failed to set hardware context negotiation interface: {err}");
             }
         }
 
@@ -973,45 +967,50 @@ impl Core for TestCore {
         self.vulkan.take();
         let iface = unsafe { ctx.get_hw_render_interface_vulkan() };
 
-        if let Some(iface) = iface {
-            if iface.interface_type
-                != retro_hw_render_interface_type::RETRO_HW_RENDER_INTERFACE_VULKAN
-            {
-                log::error!(
-                    "Unexpected hardware interface type: {:?}",
-                    iface.interface_type as u32
-                );
-                return;
+        match iface {
+            Ok(iface) => {
+                if iface.interface_type
+                    != retro_hw_render_interface_type::RETRO_HW_RENDER_INTERFACE_VULKAN
+                {
+                    log::error!(
+                        "Unexpected hardware interface type: {:?}",
+                        iface.interface_type as u32
+                    );
+                    return;
+                }
+
+                if iface.interface_version != RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION {
+                    log::error!(
+                        "Unexpected hardware interface version {}, got version {}",
+                        RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION,
+                        iface.interface_version
+                    );
+                    return;
+                }
+
+                if iface.get_instance_proc_addr.is_none() {
+                    log::error!("Invalid function pointer to \"get_instance_proc_addr\"");
+                    return;
+                }
+
+                let static_fn = vk::StaticFn {
+                    get_instance_proc_addr: iface.get_instance_proc_addr.unwrap(),
+                };
+
+                let instance = unsafe { ash::Instance::load(&static_fn, iface.instance) };
+                let device = unsafe { ash::Device::load(instance.fp_v1_0(), iface.device) };
+                let entry = unsafe { ash::Entry::from_static_fn(static_fn) };
+
+                self.instance.replace(instance);
+                self.device.replace(device);
+                self.entry.replace(entry);
+                self.vulkan.replace(iface);
+
+                self.init();
             }
-
-            if iface.interface_version != RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION {
-                log::error!(
-                    "Unexpected hardware interface version {}, got version {}",
-                    RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION,
-                    iface.interface_version
-                );
-                return;
+            Err(err) => {
+                log::error!("Failed to accquire Vulkan context: {err}");
             }
-
-            if iface.get_instance_proc_addr.is_none() {
-                log::error!("Invalid function pointer to \"get_instance_proc_addr\"");
-                return;
-            }
-
-            let static_fn = vk::StaticFn {
-                get_instance_proc_addr: iface.get_instance_proc_addr.unwrap(),
-            };
-
-            let instance = unsafe { ash::Instance::load(&static_fn, iface.instance) };
-            let device = unsafe { ash::Device::load(&instance.fp_v1_0(), iface.device) };
-            let entry = unsafe { ash::Entry::from_static_fn(static_fn) };
-
-            self.instance.replace(instance);
-            self.device.replace(device);
-            self.entry.replace(entry);
-            self.vulkan.replace(iface);
-
-            self.init();
         }
     }
 

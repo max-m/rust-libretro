@@ -20,8 +20,8 @@
 
 use libc::c_char;
 use rust_libretro::{
-    contexts::*, core::Core, env_version, input_descriptor, input_descriptors, proc::CoreOptions,
-    retro_core, sys::*, types::*,
+    contexts::*, core::Core, env_version, error::EnvironmentCallError, input_descriptor,
+    input_descriptors, proc::CoreOptions, retro_core, sys::*, types::*,
 };
 use std::ffi::CString;
 
@@ -168,16 +168,10 @@ impl TestCore {
     fn update_input(&mut self, ctx: &mut RunContext) {
         let gctx: GenericContext = ctx.into();
 
-        if ctx.get_input_state(
-            0,
-            RETRO_DEVICE_KEYBOARD,
-            0,
-            retro_key::RETROK_RETURN.0 as u32,
-        ) != 0
-        {
+        if ctx.get_input_state(0, RETRO_DEVICE_KEYBOARD, 0, retro_key::RETROK_RETURN.0) != 0 {
             log::info!("Return key is pressed!")
         }
-        if ctx.get_input_state(0, RETRO_DEVICE_KEYBOARD, 0, retro_key::RETROK_x.0 as u32) != 0 {
+        if ctx.get_input_state(0, RETRO_DEVICE_KEYBOARD, 0, retro_key::RETROK_x.0) != 0 {
             log::info!("x key is pressed!")
         }
 
@@ -368,11 +362,15 @@ impl TestCore {
                     "Port #: {port}   Strong rumble: {} ({strength_strong:04X}).",
                     if start { "ON" } else { "OFF" }
                 );
-                gctx.set_rumble_state(
+
+                if let Err(err) = gctx.set_rumble_state(
                     port,
                     retro_rumble_effect::RETRO_RUMBLE_STRONG,
                     if start { strength_strong } else { 0 },
-                );
+                ) {
+                    log::error!("Failed to set rumble state: {err}");
+                }
+
                 self.old_start[port as usize] = start;
                 self.old_strength_strong[port as usize] = strength_strong;
             }
@@ -384,11 +382,15 @@ impl TestCore {
                     "Port #: {port}   Weak rumble: {} ({strength_weak:04X}).",
                     if select { "ON" } else { "OFF" }
                 );
-                gctx.set_rumble_state(
+
+                if let Err(err) = gctx.set_rumble_state(
                     port,
                     retro_rumble_effect::RETRO_RUMBLE_WEAK,
-                    if select { strength_weak } else { 0 },
-                );
+                    if start { strength_strong } else { 0 },
+                ) {
+                    log::error!("Failed to set rumble state: {err}");
+                }
+
                 self.old_select[port as usize] = select;
                 self.old_strength_weak[port as usize] = strength_weak;
             }
@@ -471,7 +473,10 @@ impl TestCore {
         ctx.draw_frame(data, width, height, pitch);
     }
 
-    fn set_sub_system_info(&self, ctx: &mut SetEnvironmentContext) {
+    fn set_subsystem_info(
+        &self,
+        ctx: &mut SetEnvironmentContext,
+    ) -> Result<(), EnvironmentCallError> {
         let mem1 = [
             retro_subsystem_memory_info {
                 extension: b"ram1\0".as_ptr() as *const c_char,
@@ -530,10 +535,13 @@ impl TestCore {
                 num_roms: 0,
                 id: 0,
             },
-        ]);
+        ])
     }
 
-    fn set_controller_info(&self, ctx: &mut SetEnvironmentContext) {
+    fn set_controller_info(
+        &self,
+        ctx: &mut SetEnvironmentContext,
+    ) -> Result<(), EnvironmentCallError> {
         const DUMMY1: u32 = RETRO_DEVICE_SUBCLASS!(RETRO_DEVICE_ANALOG, 0);
         const DUMMY2: u32 = RETRO_DEVICE_SUBCLASS!(RETRO_DEVICE_ANALOG, 1);
         const RETRO_GUN: u32 = RETRO_DEVICE_LIGHTGUN;
@@ -574,7 +582,7 @@ impl TestCore {
         ];
 
         let gctx: GenericContext = ctx.into();
-        gctx.set_controller_info(&PORTS);
+        gctx.set_controller_info(&PORTS)
     }
 }
 
@@ -599,7 +607,9 @@ impl Core for TestCore {
         );
 
         let gctx: GenericContext = ctx.into();
-        gctx.set_input_descriptors(INPUT_DESCRIPTORS);
+        if let Err(err) = gctx.set_input_descriptors(INPUT_DESCRIPTORS) {
+            log::error!("Failed to set input descriptors: {err}");
+        }
     }
 
     fn on_set_environment(&mut self, initial: bool, ctx: &mut SetEnvironmentContext) {
@@ -607,10 +617,16 @@ impl Core for TestCore {
             return;
         }
 
-        ctx.set_support_no_game(true);
+        ctx.set_support_no_game(true)
+            .expect("telling the frontend that we can run without content to succeed");
 
-        self.set_sub_system_info(ctx);
-        self.set_controller_info(ctx);
+        if let Err(err) = self.set_subsystem_info(ctx) {
+            log::error!("Failed to set subsystem info: {err}");
+        }
+
+        if let Err(err) = self.set_controller_info(ctx) {
+            log::error!("Failed to set controller info: {err}");
+        }
     }
 
     fn on_get_av_info(&mut self, _ctx: &mut GetAvInfoContext) -> retro_system_av_info {
@@ -621,13 +637,18 @@ impl Core for TestCore {
         &mut self,
         _info: Option<retro_game_info>,
         ctx: &mut LoadGameContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        if !ctx.set_pixel_format(PixelFormat::XRGB8888) {
-            return Err("XRGB8888 is not supported".into());
-        }
+    ) -> rust_libretro::core::Result<()> {
+        ctx.set_pixel_format(PixelFormat::XRGB8888).map_err(|_| {
+            rust_libretro::anyhow::anyhow!("Required pixel format “XRGB8888” is not supported")
+        })?;
 
-        ctx.set_performance_level(0);
-        ctx.enable_frame_time_callback((1000000.0f64 / 60.0).round() as retro_usec_t);
+        let _ = ctx.set_performance_level(0);
+
+        if let Err(err) =
+            ctx.enable_frame_time_callback((1000000.0f64 / 60.0).round() as retro_usec_t)
+        {
+            log::error!("Failed to enable frame time callback: {}", err);
+        }
 
         match ctx.enable_rumble_interface() {
             Ok(_) => log::info!("Rumble is supported"),
@@ -635,8 +656,14 @@ impl Core for TestCore {
         }
 
         let gctx: GenericContext = ctx.into();
-        gctx.enable_audio_callback();
-        gctx.enable_keyboard_callback();
+
+        if let Err(err) = gctx.enable_audio_callback() {
+            log::error!("Failed to enable audio callback: {}", err);
+        }
+
+        if let Err(err) = gctx.enable_keyboard_callback() {
+            log::error!("Failed to enable keyboard callback: {}", err);
+        }
 
         Ok(())
     }
@@ -647,15 +674,15 @@ impl Core for TestCore {
         _info: *const retro_game_info,
         num_info: usize,
         ctx: &mut LoadGameSpecialContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> rust_libretro::core::Result<()> {
         log::info!("Loading special content!");
 
         if game_type != 0x200 {
-            return Err(format!("Unknown game type: 0x{game_type:03X}").into());
+            rust_libretro::anyhow::bail!("Unknown game type: 0x{game_type:03X}");
         }
 
         if num_info != 2 {
-            return Err(format!("Invalid number of info objects: {num_info}").into());
+            rust_libretro::anyhow::bail!("Invalid number of info objects: {num_info}");
         }
 
         self.on_load_game(None, &mut ctx.into())
@@ -673,30 +700,30 @@ impl Core for TestCore {
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
         match ctx.get_variable("test_aspect") {
-            Some("4:3") => self.aspect = 4.0 / 3.0,
-            Some("16:9") => self.aspect = 16.0 / 9.0,
+            Ok("4:3") => self.aspect = 4.0 / 3.0,
+            Ok("16:9") => self.aspect = 16.0 / 9.0,
             _ => (),
         }
 
-        if let Some(value) = ctx.get_variable("test_samplerate") {
+        if let Ok(value) = ctx.get_variable("test_samplerate") {
             self.sample_rate = value.parse().unwrap()
         }
 
         match ctx.get_variable("test_analog_mouse") {
-            Some("true") => self.analog_mouse = true,
-            Some("false") => self.analog_mouse = false,
+            Ok("true") => self.analog_mouse = true,
+            Ok("false") => self.analog_mouse = false,
             _ => (),
         }
 
         match ctx.get_variable("test_analog_mouse_relative") {
-            Some("true") => self.analog_mouse_relative = true,
-            Some("false") => self.analog_mouse_relative = false,
+            Ok("true") => self.analog_mouse_relative = true,
+            Ok("false") => self.analog_mouse_relative = false,
             _ => (),
         }
 
         match ctx.get_variable("test_audio_enable") {
-            Some("true") => self.audio_enable = true,
-            Some("false") => self.audio_enable = false,
+            Ok("true") => self.audio_enable = true,
+            Ok("false") => self.audio_enable = false,
             _ => (),
         }
     }
@@ -813,17 +840,29 @@ impl Core for TestCore {
             }
         }
 
-        ctx.set_input_descriptors(&descriptors);
+        if let Err(err) = ctx.set_input_descriptors(&descriptors) {
+            log::error!("Failed to set input descriptors: {err}");
+        }
     }
 
     #[inline]
     fn on_run(&mut self, ctx: &mut RunContext, _delta_us: Option<i64>) {
         if self.last_samplerate != self.sample_rate {
             log::info!("Changing sample rate to {}", self.sample_rate);
-            ctx.set_system_av_info(self.get_av_info());
+
+            let tmp = self.last_samplerate;
+            if let Err(err) = ctx.set_system_av_info(self.get_av_info()) {
+                self.sample_rate = tmp;
+                log::error!("Failed to update AV info: {err}");
+            }
         } else if self.last_aspect != self.aspect {
             log::info!("Changing aspect ratio to {}", self.aspect);
-            ctx.set_game_geometry(self.get_av_info().geometry);
+
+            let tmp = self.last_aspect;
+            if let Err(err) = ctx.set_game_geometry(self.get_av_info().geometry) {
+                self.aspect = tmp;
+                log::error!("Failed to update game geometry information: {err}");
+            }
         }
 
         self.update_input(ctx);
@@ -868,19 +907,27 @@ impl Core for TestCore {
         std::mem::size_of_val(&self.x_coord) + std::mem::size_of_val(&self.y_coord)
     }
 
-    fn on_serialize(&mut self, slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {
+    fn on_serialize(
+        &mut self,
+        slice: &mut [u8],
+        _ctx: &mut SerializeContext,
+    ) -> rust_libretro::core::Result<()> {
         slice[0..std::mem::size_of_val(&self.x_coord)].copy_from_slice(&self.x_coord.to_le_bytes());
         slice[std::mem::size_of_val(&self.x_coord)..].copy_from_slice(&self.y_coord.to_le_bytes());
 
-        true
+        Ok(())
     }
 
-    fn on_unserialize(&mut self, slice: &mut [u8], _ctx: &mut UnserializeContext) -> bool {
+    fn on_unserialize(
+        &mut self,
+        slice: &mut [u8],
+        _ctx: &mut UnserializeContext,
+    ) -> rust_libretro::core::Result<()> {
         use byterepr::ByteRepr;
 
         self.x_coord = ByteRepr::from_le_bytes(&slice[0..std::mem::size_of_val(&self.x_coord)]);
         self.y_coord = ByteRepr::from_le_bytes(&slice[std::mem::size_of_val(&self.x_coord)..]);
 
-        true
+        Ok(())
     }
 }

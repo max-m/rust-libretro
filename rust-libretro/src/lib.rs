@@ -13,21 +13,19 @@ mod macros;
 pub mod contexts;
 pub mod core;
 pub mod environment;
+pub mod error;
 pub mod types;
 pub mod util;
 
+pub use anyhow;
 pub use const_str;
+
 pub use macros::*;
 pub use rust_libretro_proc as proc;
 pub use rust_libretro_sys as sys;
 
 use crate::{contexts::*, core::Core, core_wrapper::CoreWrapper, sys::*, types::*, util::*};
-use std::{
-    ffi::*,
-    os::raw::c_char,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{ffi::*, sync::Arc};
 
 #[doc(hidden)]
 static mut RETRO_INSTANCE: Option<CoreWrapper> = None;
@@ -147,6 +145,45 @@ macro_rules! callback {
 }
 
 #[doc(hidden)]
+macro_rules! log_error {
+    (
+        $expr:expr,
+        Ok( $($ok_expr:tt )* ) => { $( $ok:tt )* },
+        Err( $($err_expr:tt)* ) => { $( $err:tt )* },
+        $msg:literal
+    ) => {{
+        match $expr {
+            Ok( $($ok_expr)* ) => {
+                $( $ok )*
+            },
+            #[cfg(feature = "log")]
+            Err(err) => {
+                log::error!(concat!($msg, ": {:?}"), err);
+
+                $( $err )*
+            }
+            #[cfg(not(feature = "log"))]
+            Err(_) => {
+                $( $err )*
+            }
+        }
+    }};
+    (
+        $expr:expr,
+        { $( $ok:tt )* },
+        { $( $err:tt )* },
+        $msg:literal
+    ) => {{
+        log_error!(
+            $expr,
+            Ok(()) => { $( $ok )* },
+            Err(err) => { $( $ok )* },
+            $msg
+        )
+    }};
+}
+
+#[doc(hidden)]
 pub fn set_core<C: 'static + Core>(core: C) {
     unsafe {
         if RETRO_INSTANCE.is_some() {
@@ -167,7 +204,7 @@ pub fn set_core<C: 'static + Core>(core: C) {
 fn init_log(env_callback: retro_environment_t) {
     let retro_logger = unsafe { environment::get_log_callback(env_callback) };
 
-    let retro_logger = if let Ok(Some(log_callback)) = retro_logger {
+    let retro_logger = if let Ok(log_callback) = retro_logger {
         logger::RetroLogger::new(log_callback)
     } else {
         logger::RetroLogger::new(retro_log_callback { log: None })
@@ -288,7 +325,12 @@ pub unsafe extern "C" fn retro_init() {
     log::trace!("retro_init()");
 
     if let Some(mut wrapper) = RETRO_INSTANCE.as_mut() {
-        wrapper.can_dupe = environment::can_dupe(wrapper.environment_callback);
+        wrapper.can_dupe = log_error!(
+            environment::can_dupe(wrapper.environment_callback),
+            { true },
+            { false },
+            "environment::can_dupe() failed"
+        );
 
         let mut ctx = InitContext::new(
             &wrapper.environment_callback,
@@ -405,7 +447,12 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
 
                 #[cfg(feature = "unstable-env-commands")]
                 {
-                    wrapper.supports_bitmasks = environment::get_input_bitmasks(Some(callback));
+                    wrapper.supports_bitmasks = log_error!(
+                        environment::get_input_bitmasks(wrapper.environment_callback),
+                        { true },
+                        { false },
+                        "environment::get_input_bitmasks() failed"
+                    );
                 }
             }
 
@@ -421,9 +468,18 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
 
         // Our default implementation of `set_core_options` uses `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION`,
         // which seems to only work on the first call to `retro_set_environment`.
-        if initial && !wrapper.core.set_core_options(&ctx) {
-            #[cfg(feature = "log")]
-            log::warn!("Failed to set core options");
+        if initial {
+            match wrapper.core.set_core_options(&ctx) {
+                #[cfg(feature = "log")]
+                Ok(true) => {
+                    log::debug!("Frontend supports option categories");
+                }
+                #[cfg(feature = "log")]
+                Err(err) => {
+                    log::warn!("Failed to set core options: {}", err);
+                }
+                _ => (),
+            }
         }
 
         return wrapper.core.on_set_environment(initial, &mut ctx);
@@ -466,14 +522,19 @@ pub unsafe extern "C" fn retro_run() {
     log::trace!("retro_run()");
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        if environment::get_variable_update(wrapper.environment_callback) {
-            let mut ctx = OptionsChangedContext::new(
-                &wrapper.environment_callback,
-                Arc::clone(&wrapper.interfaces),
-            );
+        log_error!(
+            environment::get_variable_update(wrapper.environment_callback),
+            {
+                let mut ctx = OptionsChangedContext::new(
+                    &wrapper.environment_callback,
+                    Arc::clone(&wrapper.interfaces),
+                );
 
-            wrapper.core.on_options_changed(&mut ctx);
-        }
+                wrapper.core.on_options_changed(&mut ctx);
+            },
+            {},
+            "environment::get_variable_update() failed"
+        );
 
         if let Some(callback) = wrapper.input_poll_callback {
             (callback)();
@@ -529,7 +590,12 @@ pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: 
         // Convert the given buffer into a proper slice
         let slice = std::slice::from_raw_parts_mut(data as *mut u8, size);
 
-        return wrapper.core.on_serialize(slice, &mut ctx);
+        return log_error!(
+            wrapper.core.on_serialize(slice, &mut ctx),
+            { true },
+            { false },
+            "failed to serialize"
+        );
     }
 
     panic!("retro_serialize: Core has not been initialized yet!");
@@ -560,7 +626,12 @@ pub unsafe extern "C" fn retro_unserialize(data: *const std::os::raw::c_void, si
         // Convert the given buffer into a proper slice
         let slice = std::slice::from_raw_parts_mut(data as *mut u8, size);
 
-        return wrapper.core.on_unserialize(slice, &mut ctx);
+        return log_error!(
+            wrapper.core.on_unserialize(slice, &mut ctx),
+            { true },
+            { false },
+            "failed to deserialize"
+        );
     }
 
     panic!("retro_unserialize: Core has not been initialized yet!");

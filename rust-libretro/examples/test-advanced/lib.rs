@@ -189,7 +189,7 @@ impl Pixel {
 
         let value: T = match format {
             XRGB1555 => ((r & 0b11111) << 10) | ((g & 0b11111) << 5) | (b & 0b11111),
-            XRGB8888 => ((r as u32) << 16) | ((g as u32) << 8) | b,
+            XRGB8888 => (r << 16) | (g << 8) | b,
             RGB565 => ((r & 0b11111) << 11) | ((g & 0b111111) << 5) | (b & 0b11111),
             _ => r | g | b,
         }
@@ -448,7 +448,7 @@ impl AdvancedTestCore {
 
         for y in 0..HEIGHT as usize {
             for x in 0..WIDTH as usize {
-                let index = (y as usize * pitch) + x as usize;
+                let index = (y * pitch) + x;
 
                 if ((HEIGHT as usize - y) + self.state.frame as usize) % mod_val > cmp_val {
                     data[index] = white;
@@ -576,8 +576,8 @@ impl AdvancedTestCore {
         let data: &mut [T] = bytemuck::cast_slice_mut(data);
         let pitch = fb.pitch / fb.format.bit_per_pixel();
 
-        let mod_val = HEIGHT as u32;
-        let cmp_val = HEIGHT as u32 / 2;
+        let mod_val = HEIGHT;
+        let cmp_val = HEIGHT / 2;
 
         let white = Pixel::rgb(255, 255, 255, fb.format);
         let black = Pixel::rgb(0, 0, 0, fb.format);
@@ -682,10 +682,22 @@ impl AdvancedTestCore {
                 let mut calls: u64 = 0;
                 let mut iter_len = 32;
                 let mut now;
-                let start = gctx.perf_get_time_usec();
+                let start = match gctx.perf_get_time_usec() {
+                    Ok(v) => v,
+                    Err(err) => {
+                        log::error!("perf_get_time_usec() failed: {err}");
+                        return;
+                    }
+                };
 
                 loop {
-                    now = gctx.perf_get_time_usec();
+                    now = match gctx.perf_get_time_usec() {
+                        Ok(v) => v,
+                        Err(err) => {
+                            log::error!("perf_get_time_usec() failed: {err}");
+                            return;
+                        }
+                    };
 
                     if now < start + 1000 && iter_len < 0x10000000 {
                         iter_len *= 2;
@@ -813,7 +825,8 @@ impl Core for AdvancedTestCore {
             return;
         }
 
-        ctx.set_support_no_game(true);
+        ctx.set_support_no_game(true)
+            .expect("telling the frontend that we can run without content to succeed");
     }
 
     fn on_get_av_info(&mut self, _ctx: &mut GetAvInfoContext) -> retro_system_av_info {
@@ -834,9 +847,9 @@ impl Core for AdvancedTestCore {
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
         match ctx.get_variable("test_advanced_pixel_format") {
-            Some("0RGB1555") => self.pixel_format = PixelFormat::XRGB1555,
-            Some("XRGB8888") => self.pixel_format = PixelFormat::XRGB8888,
-            Some("RGB565") => self.pixel_format = PixelFormat::RGB565,
+            Ok("0RGB1555") => self.pixel_format = PixelFormat::XRGB1555,
+            Ok("XRGB8888") => self.pixel_format = PixelFormat::XRGB8888,
+            Ok("RGB565") => self.pixel_format = PixelFormat::RGB565,
             _ => (),
         }
     }
@@ -845,15 +858,31 @@ impl Core for AdvancedTestCore {
         &mut self,
         _info: Option<retro_game_info>,
         ctx: &mut LoadGameContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> rust_libretro::core::Result<()> {
         self.active_pixel_format = self.pixel_format;
-        ctx.set_pixel_format(self.active_pixel_format);
-        ctx.set_performance_level(0);
-        ctx.enable_frame_time_callback((1000000.0f64 / FRAMERATE).round() as retro_usec_t);
+        ctx.set_pixel_format(self.active_pixel_format)
+            .map_err(|_| {
+                rust_libretro::anyhow::anyhow!(
+                    "Required pixel format “{:?}” is not supported",
+                    self.active_pixel_format
+                )
+            })?;
+
+        let _ = ctx.set_performance_level(0);
+
+        if let Err(err) =
+            ctx.enable_frame_time_callback((1000000.0f64 / 60.0).round() as retro_usec_t)
+        {
+            log::error!("Failed to enable frame time callback: {}", err);
+        }
+
         self.has_perf = ctx.enable_perf_interface().is_ok();
 
         let gctx: GenericContext = ctx.into();
-        gctx.enable_audio_callback();
+
+        if let Err(err) = gctx.enable_audio_callback() {
+            log::error!("Failed to enable audio callback: {}", err);
+        }
 
         Ok(())
     }
@@ -1013,27 +1042,32 @@ impl Core for AdvancedTestCore {
         std::mem::size_of::<State>()
     }
 
-    fn on_serialize(&mut self, slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {
+    fn on_serialize(
+        &mut self,
+        slice: &mut [u8],
+        _ctx: &mut SerializeContext,
+    ) -> rust_libretro::core::Result<()> {
         use bincode::Options;
 
         bincode::DefaultOptions::new()
             .allow_trailing_bytes()
             .serialize_into(slice, &self.state)
-            .is_ok()
+            .map_err(Into::into)
     }
 
-    fn on_unserialize(&mut self, slice: &mut [u8], _ctx: &mut UnserializeContext) -> bool {
+    fn on_unserialize(
+        &mut self,
+        slice: &mut [u8],
+        _ctx: &mut UnserializeContext,
+    ) -> rust_libretro::core::Result<()> {
         use bincode::Options;
 
-        if let Ok(state) = bincode::DefaultOptions::new()
+        let state = bincode::DefaultOptions::new()
             .allow_trailing_bytes()
-            .deserialize(slice)
-        {
-            let _ = std::mem::replace(&mut self.state, state);
-            return true;
-        }
+            .deserialize(slice)?;
 
-        false
+        let _ = std::mem::replace(&mut self.state, state);
+        Ok(())
     }
 }
 

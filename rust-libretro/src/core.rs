@@ -1,5 +1,10 @@
 //! Provides the [`Core`] and [`CoreOptions`] traits.
-use crate::*;
+
+use crate::{contexts::*, error::EnvironmentCallError, sys::*, types::*};
+use std::ffi::{CStr, CString};
+
+pub type Error = crate::anyhow::Error;
+pub type Result<T> = crate::anyhow::Result<T>;
 
 /// This trait defines the [`set_core_options`](CoreOptions::set_core_options) function.
 pub trait CoreOptions {
@@ -10,8 +15,11 @@ pub trait CoreOptions {
     /// - [`SetEnvironmentContext::set_core_options`]
     /// - [`SetEnvironmentContext::set_core_options_intl`]
     /// - [`SetEnvironmentContext::set_variables`]
-    fn set_core_options(&self, _ctx: &SetEnvironmentContext) -> bool {
-        true
+    fn set_core_options(
+        &self,
+        _ctx: &SetEnvironmentContext,
+    ) -> core::result::Result<bool, EnvironmentCallError> {
+        Ok(false)
     }
 }
 
@@ -80,17 +88,17 @@ pub trait Core: CoreOptions {
 
     /// Serializes internal state. If failed, or size is lower than
     /// [`Core::get_serialize_size`], it should return [`false`], [`true'] otherwise.
-    fn on_serialize(&mut self, _slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {
+    fn on_serialize(&mut self, _slice: &mut [u8], _ctx: &mut SerializeContext) -> Result<()> {
         // Tell the frontend that we don’t support serialization
-        false
+        crate::anyhow::bail!("on_serialize() is unsupported")
     }
 
     /// Deserializes internal state.
     ///
     /// **TODO:** Documentation
-    fn on_unserialize(&mut self, _slice: &mut [u8], _ctx: &mut UnserializeContext) -> bool {
-        // Tell the frontend that we don’t support serialization
-        false
+    fn on_unserialize(&mut self, _slice: &mut [u8], _ctx: &mut UnserializeContext) -> Result<()> {
+        // Tell the frontend that we don’t support deserialization
+        crate::anyhow::bail!("on_serialize() is unsupported")
     }
 
     /// Called when a game should be loaded.
@@ -99,7 +107,7 @@ pub trait Core: CoreOptions {
         &mut self,
         _game: Option<retro_game_info>,
         _ctx: &mut LoadGameContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<()> {
         // By default we pretend that loading was successful
         Ok(())
     }
@@ -113,8 +121,8 @@ pub trait Core: CoreOptions {
         _info: *const retro_game_info,
         _num_info: usize,
         _ctx: &mut LoadGameSpecialContext,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        Err("on_load_game_special is not implemented".into())
+    ) -> Result<()> {
+        crate::anyhow::bail!("on_load_game_special() is not implemented")
     }
 
     /// Called when the currently loaded game should be unloaded.
