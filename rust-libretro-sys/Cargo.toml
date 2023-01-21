@@ -22,3 +22,6 @@ rust-libretro-sys-proc = { version = "0.3.1", path = "rust-libretro-sys-proc" }
 
 [build-dependencies]
 bindgen = "0.63.0"
+prettyplease = "0.1.23"
+quote = "1.0.23"
+syn = "1.0.107"
