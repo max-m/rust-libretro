@@ -240,9 +240,18 @@ pub unsafe fn set_performance_level(
 #[proc::context(GenericContext)]
 pub unsafe fn get_system_directory<'a>(
     callback: retro_environment_t,
-) -> Result<&'a Path, EnvironmentCallError> {
+) -> Result<Option<&'a Path>, EnvironmentCallError> {
     // const char **
-    get_path(callback, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY)
+
+    let ptr: *mut c_void = std::ptr::null_mut();
+    let ptr = get_mut(callback, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, ptr)?;
+    if ptr.is_null() {
+        return Ok(None);
+    }
+
+    get_path_from_pointer(ptr as *const c_char)
+        .map(Some)
+        .map_err(Into::into)
 }
 
 /// Sets the internal pixel format used by the implementation.
