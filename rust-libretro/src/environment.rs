@@ -324,9 +324,9 @@ pub unsafe fn set_disk_control_interface(
 pub unsafe fn set_hw_render(
     callback: retro_environment_t,
     data: retro_hw_render_callback,
-) -> Result<(), EnvironmentCallError> {
+) -> Result<retro_hw_render_callback, EnvironmentCallError> {
     // struct retro_hw_render_callback *
-    set(callback, RETRO_ENVIRONMENT_SET_HW_RENDER, data)
+    get_mut(callback, RETRO_ENVIRONMENT_SET_HW_RENDER, data)
 }
 
 /// Interface to acquire user-defined information from environment

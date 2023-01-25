@@ -28,6 +28,8 @@ pub struct InterfaceList {
     #[unstable(feature = "env-commands")]
     pub vfs_interface_info: VfsInterfaceInfo,
 
+    pub hw_render_callback: Option<retro_hw_render_callback>,
+
     #[unstable(feature = "env-commands")]
     pub hw_render_context_negotiation_interface:
         Option<Box<dyn HwRenderContextNegotiationInterface>>,

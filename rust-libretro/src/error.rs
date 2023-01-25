@@ -87,6 +87,9 @@ pub enum EnvironmentCallError {
     #[error("{0} is a null pointer")]
     NullPointer(&'static str),
 
+    #[error("{0} is a null pointer")]
+    NullPointer2(String),
+
     #[error("callback returned an invalid enum value: {0}")]
     InvalidEnumValue(String),
 
