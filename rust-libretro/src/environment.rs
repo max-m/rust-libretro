@@ -10,6 +10,7 @@ use crate::{
     types::*,
 };
 use std::{
+    collections::HashMap,
     ffi::{c_char, c_void, CString},
     path::Path,
 };
@@ -329,8 +330,73 @@ pub unsafe fn set_hw_render(
     get_mut(callback, RETRO_ENVIRONMENT_SET_HW_RENDER, data)
 }
 
+/// Allows the core to test whether [`RETRO_ENVIRONMENT_GET_VARIABLE`]
+/// is supported by the frontend.
+#[proc::context(GenericContext)]
+pub unsafe fn supports_get_variable(callback: retro_environment_t) -> bool {
+    // const struct retro_variable *
+    set_ptr(
+        callback,
+        RETRO_ENVIRONMENT_GET_VARIABLE,
+        std::ptr::null() as *const c_void,
+    )
+    .map(|_| true)
+    .unwrap_or(false)
+}
+
 /// Interface to acquire user-defined information from environment
 /// that cannot feasibly be supported in a multi-system way.
+///
+/// See also [`get_variable()`] and [`get_all_variables()`].
+///
+/// The `key` is set it should be set to a key which has already been set by
+/// [`set_variables`] or [`set_core_options`].
+///
+/// If `key` is None, this call obtains the complete environment string
+/// if more complex parsing is necessary.
+/// The environment string is formatted as key-value pairs
+/// delimited by semicolons as so:
+/// `key1=value1;key2=value2;...`
+///
+/// Returns [`None`] if the variable could not be found.
+#[proc::context(GenericContext)]
+#[proc::context(OptionsChangedContext)]
+#[allow(clippy::needless_lifetimes)]
+pub unsafe fn get_variable_or_environment<'a>(
+    callback: retro_environment_t,
+    key: Option<&'a str>,
+) -> Result<Option<&'a str>, EnvironmentCallError> {
+    let key = if let Some(key) = key {
+        Some(CString::new(key).map_err(StringError::from)?)
+    } else {
+        None
+    };
+
+    let var = retro_variable {
+        key: key
+            .as_ref() // we use `as_ref()` to keep the CString in scope
+            .map(|key| key.as_ptr())
+            .unwrap_or(std::ptr::null()),
+        value: std::ptr::null(),
+    };
+
+    // struct retro_variable *
+    let var = get_mut(callback, RETRO_ENVIRONMENT_GET_VARIABLE, var)?;
+
+    if var.value.is_null() {
+        return Ok(None);
+    }
+
+    let value =
+        get_str_from_pointer(var.value as *const c_char).map_err(EnvironmentCallError::from)?;
+
+    Ok(Some(value))
+}
+
+/// Interface to acquire user-defined information from environment
+/// that cannot feasibly be supported in a multi-system way.
+///
+/// See also [`get_variable_or_environment()`] and [`get_all_variables()`].
 ///
 /// The `key` should be set to a key which has already been set by
 /// [`set_variables`] or [`set_core_options`].
@@ -342,18 +408,51 @@ pub unsafe fn set_hw_render(
 pub unsafe fn get_variable<'a>(
     callback: retro_environment_t,
     key: &'a str,
-) -> Result<&'a str, EnvironmentCallError> {
-    let key = CString::new(key).map_err(StringError::from)?;
+) -> Result<Option<&'a str>, EnvironmentCallError> {
+    get_variable_or_environment(callback, Some(key))
+}
 
-    let var = retro_variable {
-        key: key.as_ptr(),
-        value: std::ptr::null(),
-    };
+/// Interface to acquire user-defined information from environment
+/// that cannot feasibly be supported in a multi-system way.
+///
+/// See also [`get_variable()`] and [`get_variable_or_environment()`].
+///
+/// Note: At the moment RetroArch (1.14.0) does not implement this feature.
+///
+/// When a frontend does not implement this feature, returns `true` in the callback
+/// and sets the variable’s value to NULL, we return [`None`].
+/// This should be the case for all frontends that support [`RETRO_ENVIRONMENT_GET_VARIABLE`]
+/// and handle a NULL value as key properly.
+/// If a frontend indicates missing support for this feature or treats a NULL key as error and
+/// returns `false` in the callback, we return [`EnvironmentCallError::Failure`].
+#[proc::context(GenericContext)]
+#[proc::context(OptionsChangedContext)]
+#[allow(clippy::needless_lifetimes)]
+pub unsafe fn get_all_variables<'a>(
+    callback: retro_environment_t,
+) -> Result<Option<HashMap<&'a str, &'a str>>, EnvironmentCallError> {
+    if let Some(mut env_str) = get_variable_or_environment(callback, None)? {
+        let mut map = HashMap::new();
 
-    // struct retro_variable *
-    let var = get_mut(callback, RETRO_ENVIRONMENT_GET_VARIABLE, var)?;
+        if let Some(stripped) = env_str.strip_suffix(';') {
+            env_str = stripped;
+        }
 
-    get_str_from_pointer(var.value as *const c_char).map_err(Into::into)
+        for pair in env_str.split(';') {
+            let [key, value]: [&'a str; 2] = pair
+                .splitn(2, '=')
+                .collect::<Vec<_>>()
+                .try_into()
+                .map_err(|_| EnvironmentCallError::KeyValueError(pair.to_owned()))?;
+
+            map.insert(key, value);
+        }
+
+        return Ok(Some(map));
+    }
+
+    // The frontend returned a null pointer as value
+    Ok(None)
 }
 
 /// Allows an implementation to signal the environment
@@ -425,7 +524,7 @@ pub unsafe fn set_variables(
 #[proc::context(GenericContext)]
 pub unsafe fn get_variable_update(
     callback: retro_environment_t,
-) -> Result<(), EnvironmentCallError> {
+) -> Result<bool, EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE)
 }
@@ -2010,6 +2109,20 @@ pub unsafe fn set_core_options_update_display_callback(
     )
 }
 
+/// Allows the core to test whether [`RETRO_ENVIRONMENT_SET_VARIABLE`]
+/// is supported by the frontend.
+#[proc::context(GenericContext)]
+pub unsafe fn supports_set_variable(callback: retro_environment_t) -> bool {
+    // const struct retro_variable *
+    set_ptr(
+        callback,
+        RETRO_ENVIRONMENT_SET_VARIABLE,
+        std::ptr::null() as *const c_void,
+    )
+    .map(|_| true)
+    .unwrap_or(false)
+}
+
 /// Allows an implementation to notify the frontend
 /// that a core option value has changed.
 ///
@@ -2026,11 +2139,6 @@ pub unsafe fn set_core_options_update_display_callback(
 /// After changing a core option value via this
 /// callback, [`get_variable_update`]
 /// will return [`true`].
-///
-/// If data is `NULL`, no changes will be registered
-/// and the callback will return [`true`]; an
-/// implementation may therefore pass `NULL` in order
-/// to test whether the callback is supported.
 #[proc::context(GenericContext)]
 pub unsafe fn set_variable(
     callback: retro_environment_t,

@@ -102,6 +102,9 @@ pub enum EnvironmentCallError {
     #[error("unsupported: {0}")]
     Unsupported(String),
 
+    #[error("failed to parse key-value pair: {0}")]
+    KeyValueError(String),
+
     #[error("Failed to enable {0}")]
     FailedToEnable(&'static str),
 

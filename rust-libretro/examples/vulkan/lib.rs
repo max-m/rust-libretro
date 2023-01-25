@@ -915,7 +915,7 @@ impl Core for TestCore {
     }
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
-        if let Ok(value) = ctx.get_variable("testvulkan_resolution") {
+        if let Ok(Some(value)) = ctx.get_variable("testvulkan_resolution") {
             let dimensions = value
                 .split('x')
                 .map(|x| x.parse::<u16>().unwrap())

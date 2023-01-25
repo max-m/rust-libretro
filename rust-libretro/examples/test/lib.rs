@@ -700,30 +700,30 @@ impl Core for TestCore {
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
         match ctx.get_variable("test_aspect") {
-            Ok("4:3") => self.aspect = 4.0 / 3.0,
-            Ok("16:9") => self.aspect = 16.0 / 9.0,
+            Ok(Some("4:3")) => self.aspect = 4.0 / 3.0,
+            Ok(Some("16:9")) => self.aspect = 16.0 / 9.0,
             _ => (),
         }
 
-        if let Ok(value) = ctx.get_variable("test_samplerate") {
+        if let Ok(Some(value)) = ctx.get_variable("test_samplerate") {
             self.sample_rate = value.parse().unwrap()
         }
 
         match ctx.get_variable("test_analog_mouse") {
-            Ok("true") => self.analog_mouse = true,
-            Ok("false") => self.analog_mouse = false,
+            Ok(Some("true")) => self.analog_mouse = true,
+            Ok(Some("false")) => self.analog_mouse = false,
             _ => (),
         }
 
         match ctx.get_variable("test_analog_mouse_relative") {
-            Ok("true") => self.analog_mouse_relative = true,
-            Ok("false") => self.analog_mouse_relative = false,
+            Ok(Some("true")) => self.analog_mouse_relative = true,
+            Ok(Some("false")) => self.analog_mouse_relative = false,
             _ => (),
         }
 
         match ctx.get_variable("test_audio_enable") {
-            Ok("true") => self.audio_enable = true,
-            Ok("false") => self.audio_enable = false,
+            Ok(Some("true")) => self.audio_enable = true,
+            Ok(Some("false")) => self.audio_enable = false,
             _ => (),
         }
     }

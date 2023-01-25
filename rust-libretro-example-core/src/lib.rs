@@ -133,14 +133,14 @@ impl Core for ExampleCore {
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
         match ctx.get_variable("foo_option_1") {
-            Ok("true") => self.option_1 = true,
-            Ok("false") => self.option_1 = false,
+            Ok(Some("true")) => self.option_1 = true,
+            Ok(Some("false")) => self.option_1 = false,
             _ => (),
         }
 
         match ctx.get_variable("foo_option_2") {
-            Ok("true") => self.option_2 = true,
-            Ok("false") => self.option_2 = false,
+            Ok(Some("true")) => self.option_2 = true,
+            Ok(Some("false")) => self.option_2 = false,
             _ => (),
         }
     }
