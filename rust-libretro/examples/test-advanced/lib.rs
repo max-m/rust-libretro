@@ -847,9 +847,9 @@ impl Core for AdvancedTestCore {
 
     fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
         match ctx.get_variable("test_advanced_pixel_format") {
-            Ok("0RGB1555") => self.pixel_format = PixelFormat::XRGB1555,
-            Ok("XRGB8888") => self.pixel_format = PixelFormat::XRGB8888,
-            Ok("RGB565") => self.pixel_format = PixelFormat::RGB565,
+            Ok(Some("0RGB1555")) => self.pixel_format = PixelFormat::XRGB1555,
+            Ok(Some("XRGB8888")) => self.pixel_format = PixelFormat::XRGB8888,
+            Ok(Some("RGB565")) => self.pixel_format = PixelFormat::RGB565,
             _ => (),
         }
     }
