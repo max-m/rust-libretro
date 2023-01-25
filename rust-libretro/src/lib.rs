@@ -448,7 +448,7 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
                 #[cfg(feature = "unstable-env-commands")]
                 {
                     wrapper.supports_bitmasks = log_error!(
-                        environment::get_input_bitmasks(wrapper.environment_callback),
+                        environment::get_input_bitmasks(Some(callback)),
                         { true },
                         { false },
                         "environment::get_input_bitmasks() failed"
@@ -524,15 +524,17 @@ pub unsafe extern "C" fn retro_run() {
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
         log_error!(
             environment::get_variable_update(wrapper.environment_callback),
-            {
-                let mut ctx = OptionsChangedContext::new(
-                    &wrapper.environment_callback,
-                    Arc::clone(&wrapper.interfaces),
-                );
+            Ok(updated) => {
+                if updated {
+                    let mut ctx = OptionsChangedContext::new(
+                        &wrapper.environment_callback,
+                        Arc::clone(&wrapper.interfaces),
+                    );
 
-                wrapper.core.on_options_changed(&mut ctx);
+                    wrapper.core.on_options_changed(&mut ctx);
+                }
             },
-            {},
+            Err(err) => {},
             "environment::get_variable_update() failed"
         );
 
