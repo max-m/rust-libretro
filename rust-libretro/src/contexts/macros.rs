@@ -197,3 +197,16 @@ macro_rules! get_vfs_function {
         )
     }};
 }
+
+#[doc(hidden)]
+macro_rules! get_hw_render_callback_function {
+    ($interfaces:ident, $fn_name:ident) => {{
+        get_interface_function!(
+            $interfaces,
+            hw_render_callback,
+            "Hardware Render Callback",
+            enable_hw_render,
+            $fn_name
+        )
+    }};
+}

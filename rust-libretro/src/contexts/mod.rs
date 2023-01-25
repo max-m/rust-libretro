@@ -735,6 +735,47 @@ impl<'a> GenericContext<'a> {
 
         Err(VfsError::FailedToClose.into())
     }
+
+    /// Once [`Core::on_hw_context_reset()`] has been called this function
+    /// can be used to ask the frontend for the addresses of functions like `glClear`.
+    pub fn hw_render_get_proc_address(
+        &self,
+        symbol: &str,
+    ) -> Result<unsafe extern "C" fn(), EnvironmentCallError> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        let get_proc_address = get_hw_render_callback_function!(interfaces, get_proc_address);
+
+        let c_symbol = CString::new(symbol).map_err(StringError::from)?;
+        let ptr = unsafe { get_proc_address(c_symbol.as_ptr()) };
+
+        // Check if we got a null pointer, if not return the function pointer
+        if let Some(ptr) = ptr {
+            Ok(ptr)
+        } else {
+            Err(EnvironmentCallError::NullPointer2(format!(
+                "get_proc_address(\"{symbol}\")"
+            )))
+        }
+    }
+
+    /// In [`Core::on_run()`], use [`GenericContext::hw_render_get_framebuffer()`] to get which FBO to render to,
+    /// e.g. `glBindFramebuffer(GL_FRAMEBUFFER, ctc.hw_render_get_framebuffer())`.
+    /// This is your "backbuffer". Do not attempt to render to the real backbuffer.
+    /// You must call this every frame as it can change every frame.
+    /// The dimensions of this FBO are at least as big as declared in `max_width` and `max_height`.
+    /// If desired, the FBO also has a depth buffer attached (see [`RETRO_ENVIRONMENT_SET_HW_RENDER`]).
+    ///
+    /// Note taken from <https://docs.libretro.com/development/cores/opengl-cores/>
+    pub fn hw_render_get_framebuffer(&self) -> Result<usize, EnvironmentCallError> {
+        let interfaces = self.interfaces.read().unwrap();
+
+        let get_framebuffer = get_hw_render_callback_function!(interfaces, get_current_framebuffer);
+
+        let fbo_id = unsafe { get_framebuffer() };
+
+        Ok(fbo_id)
+    }
 }
 
 /// Functions that are safe to be called in [`Core::on_reset`].
@@ -978,16 +1019,19 @@ impl<'a> LoadGameContext<'a> {
         version_minor: u32,
         debug_context: bool,
     ) -> Result<(), EnvironmentCallError> {
+        let mut interfaces = self.interfaces.write().unwrap();
+        interfaces.hw_render_callback.take();
+
         let data = retro_hw_render_callback {
             context_type,
             bottom_left_origin,
             version_major,
             version_minor,
-            cache_context: true,
             debug_context,
 
-            depth: false,   // obsolete
-            stencil: false, // obsolete
+            cache_context: true, // “probably obsolete”
+            depth: false,        // obsolete
+            stencil: false,      // obsolete
 
             context_reset: Some(retro_hw_context_reset_callback),
             context_destroy: Some(retro_hw_context_destroyed_callback),
@@ -997,7 +1041,10 @@ impl<'a> LoadGameContext<'a> {
             get_proc_address: None,
         };
 
-        self.set_hw_render(data)
+        let iface = self.set_hw_render(data)?;
+        interfaces.hw_render_callback.replace(iface);
+
+        Ok(())
     }
 
     #[proc::unstable(feature = "env-commands")]
