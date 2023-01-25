@@ -149,7 +149,7 @@ macro_rules! log_error {
     (
         $expr:expr,
         Ok( $($ok_expr:tt )* ) => { $( $ok:tt )* },
-        Err( $($err_expr:tt)* ) => { $( $err:tt )* },
+        Err( err ) => { $( $err:tt )* },
         $msg:literal
     ) => {{
         match $expr {
@@ -327,8 +327,8 @@ pub unsafe extern "C" fn retro_init() {
     if let Some(mut wrapper) = RETRO_INSTANCE.as_mut() {
         wrapper.can_dupe = log_error!(
             environment::can_dupe(wrapper.environment_callback),
-            { true },
-            { false },
+            Ok(can_dupe) => { can_dupe },
+            Err(err) => { false },
             "environment::can_dupe() failed"
         );
 

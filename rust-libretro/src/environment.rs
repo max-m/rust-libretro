@@ -156,7 +156,7 @@ pub unsafe fn get_overscan(callback: retro_environment_t) -> Result<(), Environm
 /// Boolean value whether or not frontend supports frame duping,
 /// passing NULL to video frame callback.
 #[proc::context(GenericContext)]
-pub unsafe fn can_dupe(callback: retro_environment_t) -> Result<(), EnvironmentCallError> {
+pub unsafe fn can_dupe(callback: retro_environment_t) -> Result<bool, EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_CAN_DUPE)
 }
