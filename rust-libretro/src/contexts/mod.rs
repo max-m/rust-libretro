@@ -104,7 +104,11 @@ impl<'a> GenericContext<'a> {
             callback: Some(retro_audio_buffer_status_callback_fn),
         };
 
-        self.set_audio_buffer_status_callback(data)
+        self.set_audio_buffer_status_callback(Some(data))
+    }
+
+    pub fn disable_audio_buffer_status_callback(&self) -> Result<(), EnvironmentCallError> {
+        self.set_audio_buffer_status_callback(None)
     }
 
     #[proc::unstable(feature = "env-commands")]

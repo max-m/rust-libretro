@@ -94,6 +94,19 @@ pub unsafe fn set<T: std::fmt::Debug>(
     set_ptr(callback, id, &value as *const _)
 }
 
+#[inline(always)]
+pub unsafe fn set_option<T: std::fmt::Debug>(
+    callback: retro_environment_t,
+    id: u32,
+    value: Option<T>,
+) -> Result<(), EnvironmentCallError> {
+    set_ptr(
+        callback,
+        id,
+        value.map_or(std::ptr::null(), |x| &x as *const _),
+    )
+}
+
 /// Passes a value (by a raw const pointer) to the environment callback.
 ///
 /// Returns [`None`] if the environment callback hasn’t been set
@@ -1921,10 +1934,10 @@ pub unsafe fn get_input_max_users(callback: retro_environment_t) -> (u32, bool) 
 #[proc::context(GenericContext)]
 pub unsafe fn set_audio_buffer_status_callback(
     callback: retro_environment_t,
-    data: retro_audio_buffer_status_callback,
+    data: Option<retro_audio_buffer_status_callback>,
 ) -> Result<(), EnvironmentCallError> {
     // const struct retro_audio_buffer_status_callback *
-    set(
+    set_option(
         callback,
         RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK,
         data,
