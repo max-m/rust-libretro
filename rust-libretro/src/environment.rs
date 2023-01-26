@@ -165,7 +165,7 @@ pub unsafe fn set_rotation(
     note = "This function is considered deprecated in favor of using core options to manage overscan in a more nuanced, core-specific way"
 )]
 #[proc::context(GenericContext)]
-pub unsafe fn get_overscan(callback: retro_environment_t) -> Result<(), EnvironmentCallError> {
+pub unsafe fn get_overscan(callback: retro_environment_t) -> Result<bool, EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_OVERSCAN)
 }
