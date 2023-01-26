@@ -272,12 +272,12 @@ pub unsafe fn get_system_directory<'a>(
 /// format.
 #[proc::context(LoadGameContext)]
 #[proc::context(GetAvInfoContext)]
-pub unsafe fn set_pixel_format<F: Into<retro_pixel_format>>(
+pub unsafe fn set_pixel_format<F: Into<retro_pixel_format> + std::marker::Copy>(
     callback: retro_environment_t,
     format: F,
-) -> Result<(), EnvironmentCallError> {
+) -> Result<F, EnvironmentCallError> {
     // const enum retro_pixel_format *
-    set(callback, RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, format.into())
+    set(callback, RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, format.into()).map(|_| format)
 }
 
 /// Sets an array of retro_input_descriptors.
