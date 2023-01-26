@@ -13,6 +13,7 @@ on:
       - ".github/workflows/release.yaml"
       - "media/*"
       - "**.md"
+  workflow_dispatch:
 
 jobs:
   rustfmt:

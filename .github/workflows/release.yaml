@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 jobs:
   docs:
@@ -23,8 +24,17 @@ jobs:
           tar cvf ../../rust-libretro-docs.tar .
           gzip ../../rust-libretro-docs.tar
 
+      - name: Release Docs (Artifact)
+        uses: actions/upload-artifact@v3
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: rust-libretro-docs
+          path: rust-libretro-docs.tar.gz
+          if-no-files-found: error
+
       - name: Release Docs
         uses: svenstaro/upload-release-action@v2
+        if: github.event_name != 'workflow_dispatch'
         with:
           file: rust-libretro-docs.tar.gz
           release_name: rust-libretro ${{ github.ref_name }}
@@ -188,7 +198,16 @@ jobs:
 
           echo "file=$(realpath $file.gz --relative-to=$base_dir)" >> $GITHUB_OUTPUT
 
+      - name: Release (Artifact)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v3
+        with:
+          name: rust-libretro-${{ matrix.name }}
+          path: ${{ steps.compression.outputs.file }}
+          if-no-files-found: error
+
       - name: Release
+        if: github.event_name != 'workflow_dispatch'
         uses: svenstaro/upload-release-action@v2
         with:
           file: ${{ steps.compression.outputs.file }}
