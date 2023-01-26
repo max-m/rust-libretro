@@ -65,6 +65,22 @@ pub unsafe fn get_path<'a>(
     get_path_from_pointer(ptr as *const c_char).map_err(Into::into)
 }
 
+/// Helper function to query a nullable string pointer and convert it into [`Option<Path>`].
+pub unsafe fn get_optional_path<'a>(
+    callback: retro_environment_t,
+    id: u32,
+) -> Result<Option<&'a Path>, EnvironmentCallError> {
+    let ptr: *mut c_void = std::ptr::null_mut();
+    let ptr = get_mut(callback, id, ptr)?;
+    if ptr.is_null() {
+        return Ok(None);
+    }
+
+    get_path_from_pointer(ptr as *const c_char)
+        .map(Some)
+        .map_err(Into::into)
+}
+
 /// Passes a value to the environment callback.
 ///
 /// Returns [`None`] if the environment callback hasn’t been set
@@ -243,16 +259,7 @@ pub unsafe fn get_system_directory<'a>(
     callback: retro_environment_t,
 ) -> Result<Option<&'a Path>, EnvironmentCallError> {
     // const char **
-
-    let ptr: *mut c_void = std::ptr::null_mut();
-    let ptr = get_mut(callback, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, ptr)?;
-    if ptr.is_null() {
-        return Ok(None);
-    }
-
-    get_path_from_pointer(ptr as *const c_char)
-        .map(Some)
-        .map_err(Into::into)
+    get_optional_path(callback, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY)
 }
 
 /// Sets the internal pixel format used by the implementation.
@@ -552,9 +559,9 @@ pub unsafe fn set_support_no_game(
 #[proc::context(GenericContext)]
 pub unsafe fn get_libretro_path<'a>(
     callback: retro_environment_t,
-) -> Result<&'a Path, EnvironmentCallError> {
+) -> Result<Option<&'a Path>, EnvironmentCallError> {
     // const char **
-    get_path(callback, RETRO_ENVIRONMENT_GET_LIBRETRO_PATH)
+    get_optional_path(callback, RETRO_ENVIRONMENT_GET_LIBRETRO_PATH)
 }
 
 /// Lets the core know how much time has passed since last
@@ -735,9 +742,9 @@ pub unsafe fn get_location_callback(
 #[proc::context(GenericContext)]
 pub unsafe fn get_core_assets_directory<'a>(
     callback: retro_environment_t,
-) -> Result<&'a Path, EnvironmentCallError> {
+) -> Result<Option<&'a Path>, EnvironmentCallError> {
     // const char **
-    get_path(callback, RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY)
+    get_optional_path(callback, RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY)
 }
 
 /// Returns the "save" directory of the frontend, unless there is no
@@ -755,9 +762,9 @@ pub unsafe fn get_core_assets_directory<'a>(
 #[proc::context(GenericContext)]
 pub unsafe fn get_save_directory<'a>(
     callback: retro_environment_t,
-) -> Result<&'a Path, EnvironmentCallError> {
+) -> Result<Option<&'a Path>, EnvironmentCallError> {
     // const char **
-    get_path(callback, RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY)
+    get_optional_path(callback, RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY)
 }
 
 /// Sets a new av_info structure.
