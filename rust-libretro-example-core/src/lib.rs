@@ -75,13 +75,11 @@ impl Core for ExampleCore {
         }
     }
 
-    fn on_set_environment(&mut self, initial: bool, ctx: &mut SetEnvironmentContext) {
-        if !initial {
-            return;
-        }
-
-        ctx.set_support_no_game(true)
-            .expect("telling the frontend that we can run without content to succeed");
+    fn on_set_environment(&mut self, ctx: &mut SetEnvironmentContext) {
+        // This function gets called multiple times by RetroArch,
+        // but the supplied environment callback supports different sets of
+        // functions, so let's ignore errors here.
+        let _ = ctx.set_support_no_game(true);
     }
 
     fn on_init(&mut self, ctx: &mut InitContext) {

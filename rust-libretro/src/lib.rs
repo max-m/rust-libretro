@@ -145,8 +145,9 @@ macro_rules! callback {
 }
 
 #[doc(hidden)]
-macro_rules! log_error {
+macro_rules! log_result {
     (
+        $level:ident,
         $expr:expr,
         Ok( $($ok_expr:tt )* ) => { $( $ok:tt )* },
         Err( err ) => { $( $err:tt )* },
@@ -158,7 +159,7 @@ macro_rules! log_error {
             },
             #[cfg(feature = "log")]
             Err(err) => {
-                log::error!(concat!($msg, ": {:?}"), err);
+                log::$level!(concat!($msg, ": {}"), err);
 
                 $( $err )*
             }
@@ -168,13 +169,46 @@ macro_rules! log_error {
             }
         }
     }};
+
+    (
+        $expr:expr,
+        Ok( $($ok_expr:tt )* ) => { $( $ok:tt )* },
+        Err( err ) => { $( $err:tt )* },
+        $msg:literal
+    ) => {{
+        log_result!(
+            error,
+            $expr,
+            Ok( $($ok_expr)* ) => { $($ok)* },
+            Err( err ) => { $($err)* },
+            $msg
+        )
+    }};
+
+    (
+        $level:ident,
+        $expr:expr,
+        { $( $ok:tt )* },
+        { $( $err:tt )* },
+        $msg:literal
+    ) => {{
+        log_result!(
+            $level,
+            $expr,
+            Ok(()) => { $( $ok )* },
+            Err(err) => { $( $ok )* },
+            $msg
+        )
+    }};
+
     (
         $expr:expr,
         { $( $ok:tt )* },
         { $( $err:tt )* },
         $msg:literal
     ) => {{
-        log_error!(
+        log_result!(
+            error,
             $expr,
             Ok(()) => { $( $ok )* },
             Err(err) => { $( $ok )* },
@@ -201,17 +235,30 @@ pub fn set_core<C: 'static + Core>(core: C) {
 
 #[cfg(feature = "log")]
 #[doc(hidden)]
-fn init_log(env_callback: retro_environment_t) {
-    let retro_logger = unsafe { environment::get_log_callback(env_callback) };
+fn try_init_log(wrapper: &mut CoreWrapper, fallback: bool) {
+    if wrapper.logger_initialized {
+        return;
+    }
 
-    let retro_logger = if let Ok(log_callback) = retro_logger {
+    let log_callback = wrapper
+        .environment_callback
+        .and_then(|environment_callback| unsafe {
+            environment::get_log_callback(Some(environment_callback)).ok()
+        });
+
+    let logger = if let Some(log_callback) = log_callback {
         logger::RetroLogger::new(log_callback)
-    } else {
+    } else if fallback {
         logger::RetroLogger::new(retro_log_callback { log: None })
+    } else {
+        return;
     };
 
     log::set_max_level(log::LevelFilter::Trace);
-    log::set_boxed_logger(Box::new(retro_logger)).expect("could not set logger");
+    log::set_boxed_logger(Box::new(logger)).expect("could not set logger");
+    wrapper.logger_initialized = true;
+
+    log::info!("Logger is ready");
 }
 
 /*****************************************************************************\
@@ -324,8 +371,13 @@ pub unsafe extern "C" fn retro_init() {
     #[cfg(feature = "log")]
     log::trace!("retro_init()");
 
-    if let Some(mut wrapper) = RETRO_INSTANCE.as_mut() {
-        wrapper.can_dupe = log_error!(
+    if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
+        // Try really hard to initialize the logging interface here
+        #[cfg(feature = "log")]
+        try_init_log(wrapper, true);
+
+        wrapper.can_dupe = log_result!(
+            warn,
             environment::can_dupe(wrapper.environment_callback),
             Ok(can_dupe) => { can_dupe },
             Err(err) => { false },
@@ -435,26 +487,24 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
     log::trace!("retro_set_environment(environment = {environment:#?})");
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        let mut initial = false;
-
         if let Some(callback) = environment {
-            if !wrapper.environment_set {
-                initial = true;
-                wrapper.environment_set = true;
-
-                #[cfg(feature = "log")]
-                init_log(Some(callback));
-
-                #[cfg(feature = "unstable-env-commands")]
-                {
-                    wrapper.supports_bitmasks = log_error!(
-                        environment::get_input_bitmasks(Some(callback)),
-                        { true },
-                        { false },
-                        "environment::get_input_bitmasks() failed"
-                    );
-                }
+            #[cfg(feature = "unstable-env-commands")]
+            {
+                wrapper.supports_bitmasks |= log_result!(
+                    warn,
+                    environment::get_input_bitmasks(Some(callback)),
+                    { true },
+                    { false },
+                    "environment::get_input_bitmasks() failed"
+                );
             }
+
+            // `retro_set_environment()` gets called multiple times by RetroArch,
+            // on some calls the environment callback can hand out the logging interface,
+            // on some calls it can not. Try on every invocation and take the first valid
+            // callback we can get.
+            #[cfg(feature = "log")]
+            try_init_log(wrapper, false);
 
             wrapper.environment_callback.replace(callback);
         } else {
@@ -466,23 +516,19 @@ pub unsafe extern "C" fn retro_set_environment(environment: retro_environment_t)
             Arc::clone(&wrapper.interfaces),
         );
 
-        // Our default implementation of `set_core_options` uses `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION`,
-        // which seems to only work on the first call to `retro_set_environment`.
-        if initial {
-            match wrapper.core.set_core_options(&ctx) {
-                #[cfg(feature = "log")]
-                Ok(true) => {
-                    log::debug!("Frontend supports option categories");
-                }
-                #[cfg(feature = "log")]
-                Err(err) => {
-                    log::warn!("Failed to set core options: {}", err);
-                }
-                _ => (),
+        match wrapper.core.set_core_options(&ctx) {
+            #[cfg(feature = "log")]
+            Ok(true) => {
+                log::debug!("Frontend supports option categories");
             }
+            #[cfg(feature = "log")]
+            Err(err) => {
+                log::warn!("Failed to set core options: {}", err);
+            }
+            _ => (),
         }
 
-        return wrapper.core.on_set_environment(initial, &mut ctx);
+        return wrapper.core.on_set_environment(&mut ctx);
     }
 
     panic!("retro_set_environment: Core has not been initialized yet!");
@@ -522,7 +568,8 @@ pub unsafe extern "C" fn retro_run() {
     log::trace!("retro_run()");
 
     if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-        log_error!(
+        log_result!(
+            warn,
             environment::get_variable_update(wrapper.environment_callback),
             Ok(updated) => {
                 if updated {
@@ -534,8 +581,15 @@ pub unsafe extern "C" fn retro_run() {
                     wrapper.core.on_options_changed(&mut ctx);
                 }
             },
-            Err(err) => {},
-            "environment::get_variable_update() failed"
+            Err(err) => {
+                let mut ctx = OptionsChangedContext::new(
+                    &wrapper.environment_callback,
+                    Arc::clone(&wrapper.interfaces),
+                );
+
+                wrapper.core.on_options_changed(&mut ctx);
+            },
+            "environment::get_variable_update() failed, telling the core to check its variables"
         );
 
         if let Some(callback) = wrapper.input_poll_callback {
@@ -592,7 +646,7 @@ pub unsafe extern "C" fn retro_serialize(data: *mut std::os::raw::c_void, size: 
         // Convert the given buffer into a proper slice
         let slice = std::slice::from_raw_parts_mut(data as *mut u8, size);
 
-        return log_error!(
+        return log_result!(
             wrapper.core.on_serialize(slice, &mut ctx),
             { true },
             { false },
@@ -628,7 +682,7 @@ pub unsafe extern "C" fn retro_unserialize(data: *const std::os::raw::c_void, si
         // Convert the given buffer into a proper slice
         let slice = std::slice::from_raw_parts_mut(data as *mut u8, size);
 
-        return log_error!(
+        return log_result!(
             wrapper.core.on_unserialize(slice, &mut ctx),
             { true },
             { false },
