@@ -125,8 +125,8 @@ macro_rules! validate_bitflags {
             } else {
                 let known_bits = $flags::all().bits();
                 let diff = unchecked.bits() & !known_bits;
-                let unknown = format!("{diff:0width$b}", width = <$ty>::BITS as usize);
                 let known = format!("{known_bits:0width$b}", width = <$ty>::BITS as usize);
+                let unknown = format!("{diff:0width$b}", width = <$ty>::BITS as usize);
 
                 Err($crate::error::EnvironmentCallError::UnknownBits(
                     known, unknown,
@@ -641,9 +641,24 @@ pub unsafe fn get_input_device_capabilities(
     // uint64_t *
     let caps = get::<u64>(callback, RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES)?;
 
-    // I’m not entirely sure why this call returns a 64 bit value when the `RETRO_DEVICE_MASK`
-    // allows only eight distinct types.
-    let caps = caps as u8;
+    let caps: u8 = {
+        #[cfg(feature = "strict-bitflags")]
+        {
+            // Make sure that the value fits into our RetroDevice enum
+            caps.try_into().map_err(|_| {
+                let known_bits = RetroDevice::all().bits() as u64;
+                let diff = caps & !known_bits;
+                let known = format!("{known_bits:0width$b}", width = u8::BITS as usize);
+                let unknown = format!("{diff:0width$b}", width = u64::BITS as usize);
+                EnvironmentCallError::UnknownBits(known, unknown)
+            })?
+        }
+
+        #[cfg(not(feature = "strict-bitflags"))]
+        {
+            caps as u8
+        }
+    };
 
     validate_bitflags!(RetroDevice, u8, caps)
 }
