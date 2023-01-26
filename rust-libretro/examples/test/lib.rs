@@ -168,10 +168,17 @@ impl TestCore {
     fn update_input(&mut self, ctx: &mut RunContext) {
         let gctx: GenericContext = ctx.into();
 
-        if ctx.get_input_state(0, RETRO_DEVICE_KEYBOARD, 0, retro_key::RETROK_RETURN.0) != 0 {
+        if ctx.get_input_state(
+            0,
+            RETRO_DEVICE_KEYBOARD,
+            0,
+            retro_key::RETROK_RETURN.as_u32(),
+        ) != 0
+        {
             log::info!("Return key is pressed!")
         }
-        if ctx.get_input_state(0, RETRO_DEVICE_KEYBOARD, 0, retro_key::RETROK_x.0) != 0 {
+
+        if ctx.get_input_state(0, RETRO_DEVICE_KEYBOARD, 0, retro_key::RETROK_x.as_u32()) != 0 {
             log::info!("x key is pressed!")
         }
 
@@ -386,7 +393,7 @@ impl TestCore {
                 if let Err(err) = gctx.set_rumble_state(
                     port,
                     retro_rumble_effect::RETRO_RUMBLE_WEAK,
-                    if start { strength_strong } else { 0 },
+                    if select { strength_weak } else { 0 },
                 ) {
                     log::error!("Failed to set rumble state: {err}");
                 }
