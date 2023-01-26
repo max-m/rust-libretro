@@ -226,7 +226,7 @@ pub fn set_core<C: 'static + Core>(core: C) {
             let name = info.library_name.into_string().unwrap();
             let version = info.library_version.into_string().unwrap();
 
-            panic!("Attempted to set a core after the system was already initialized.\nAlready registered core: {} {}", name, version)
+            panic!("Attempted to set a core after the system was already initialized.\nAlready registered core: {name} {version}")
         }
 
         RETRO_INSTANCE.replace(CoreWrapper::new(core));

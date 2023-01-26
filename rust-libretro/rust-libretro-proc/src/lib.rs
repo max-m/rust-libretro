@@ -650,11 +650,10 @@ const UNSTABLE_TAG: &str = "<span class='stab unstable'>Unstable</span>";
 
 fn get_unstable_text(feature_name: &str) -> String {
     format!(
-        "# This feature is unstable and guarded by the `{}` feature flag.\
+        "# This feature is unstable and guarded by the `{feature_name}` feature flag.\
         \n\
         Please be advised that this feature might change without further notice \
-        and no guarantees about its stability can be made.",
-        feature_name
+        and no guarantees about its stability can be made."
     )
 }
 
