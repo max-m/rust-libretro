@@ -17,6 +17,7 @@ on:
 jobs:
   rustfmt:
     name: Check rustfmt
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -27,6 +28,7 @@ jobs:
 
   clippy:
     name: Run Clippy
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -42,6 +44,7 @@ jobs:
 
   docs:
     name: Generate docs
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -62,6 +65,7 @@ jobs:
 
   test_and_build:
     name: Test and build
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
