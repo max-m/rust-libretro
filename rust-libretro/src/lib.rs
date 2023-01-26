@@ -121,18 +121,6 @@ macro_rules! callback {
         pub unsafe extern "C" fn $name(arg1: $arg) {
             // Check that the instance has been created
             if let Some(wrapper) = RETRO_INSTANCE.as_mut() {
-                if arg1.is_some() {
-                    // We were given a callback, make sure that it’s not a NULL pointer
-                    if (arg1.unwrap() as *const c_void).is_null() {
-                        panic!(concat!(
-                            "Expected ",
-                            stringify!($arg),
-                            " got NULL pointer instead!"
-                        ));
-                    }
-                }
-
-                // The callback is safe to set. Either it’s None or not a NULL pointer
                 return wrapper.$handler(arg1);
             }
 
