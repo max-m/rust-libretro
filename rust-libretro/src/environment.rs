@@ -2073,10 +2073,36 @@ pub unsafe fn set_fastforwarding_override(
 #[proc::context(SetEnvironmentContext)]
 pub unsafe fn set_content_info_override(
     callback: retro_environment_t,
-    value: retro_system_content_info_override,
+    value: &[retro_system_content_info_override],
 ) -> Result<(), EnvironmentCallError> {
     // const struct retro_system_content_info_override *
-    set(callback, RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE, value)
+
+    let needs_terminator = if let Some(last) = value.last() {
+        !last.extensions.is_null() || last.need_fullpath || last.persistent_data
+    } else {
+        true
+    };
+
+    if needs_terminator {
+        let mut value = value.to_owned();
+        value.push(retro_system_content_info_override {
+            extensions: std::ptr::null(),
+            need_fullpath: false,
+            persistent_data: false,
+        });
+
+        set_ptr(
+            callback,
+            RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE,
+            value.as_ptr(),
+        )
+    } else {
+        set_ptr(
+            callback,
+            RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE,
+            value.as_ptr(),
+        )
+    }
 }
 
 /// Allows an implementation to fetch extended game
