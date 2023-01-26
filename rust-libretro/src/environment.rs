@@ -973,13 +973,19 @@ pub unsafe fn set_game_geometry(
 #[proc::context(GenericContext)]
 pub unsafe fn get_username<'a>(
     callback: retro_environment_t,
-) -> Result<&'a str, EnvironmentCallError> {
+) -> Result<Option<&'a str>, EnvironmentCallError> {
     let ptr: *mut c_void = std::ptr::null_mut();
 
     // const char **
     let ptr = get_mut(callback, RETRO_ENVIRONMENT_GET_USERNAME, ptr)?;
 
-    get_str_from_pointer(ptr as *const c_char).map_err(Into::into)
+    if ptr.is_null() {
+        return Ok(None);
+    }
+
+    get_str_from_pointer(ptr as *const c_char)
+        .map(Some)
+        .map_err(Into::into)
 }
 
 /// Returns the language of the frontend, if specified by the user.
