@@ -2088,12 +2088,46 @@ pub unsafe fn set_content_info_override(
 ///   size equal to the `num_info` argument passed to
 ///   [`Core::on_load_game_special`]
 #[proc::context(LoadGameContext)]
-#[proc::context(LoadGameSpecialContext)]
 pub unsafe fn get_game_info_ext(
     callback: retro_environment_t,
 ) -> Result<retro_game_info_ext, EnvironmentCallError> {
     // const struct retro_game_info_ext **
-    get_unchecked(callback, RETRO_ENVIRONMENT_GET_GAME_INFO_EXT)
+
+    let ptr: *const retro_game_info_ext = get_mut(
+        callback,
+        RETRO_ENVIRONMENT_GET_GAME_INFO_EXT,
+        std::ptr::null(),
+    )?;
+
+    if ptr.is_null() {
+        return Err(EnvironmentCallError::NullPointer("retro_game_info_ext"));
+    }
+
+    Ok(*ptr)
+}
+
+/// See [`get_game_info_ext`].
+///
+/// This function must be called with the `num_info` parameter
+/// you get in [`Core::on_load_game_special()`].
+#[proc::context(LoadGameSpecialContext, unsafe)]
+pub unsafe fn get_game_info_ext_array<'a>(
+    callback: retro_environment_t,
+    len: usize,
+) -> Result<&'a [retro_game_info_ext], EnvironmentCallError> {
+    // const struct retro_game_info_ext **
+
+    let ptr: *const retro_game_info_ext = get_mut(
+        callback,
+        RETRO_ENVIRONMENT_GET_GAME_INFO_EXT,
+        std::ptr::null(),
+    )?;
+
+    if ptr.is_null() {
+        return Err(EnvironmentCallError::NullPointer("retro_game_info_ext"));
+    }
+
+    Ok(std::slice::from_raw_parts(ptr, len))
 }
 
 /// Allows a frontend to signal that a core must update
