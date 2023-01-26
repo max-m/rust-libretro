@@ -477,7 +477,7 @@ impl TestCore {
         &self,
         ctx: &mut SetEnvironmentContext,
     ) -> Result<(), EnvironmentCallError> {
-        let mem1 = [
+        const MEM1: &[retro_subsystem_memory_info] = &[
             retro_subsystem_memory_info {
                 extension: b"ram1\0".as_ptr() as *const c_char,
                 type_: 0x400,
@@ -488,7 +488,7 @@ impl TestCore {
             },
         ];
 
-        let mem2 = [
+        const MEM2: &[retro_subsystem_memory_info] = &[
             retro_subsystem_memory_info {
                 extension: b"ram3\0".as_ptr() as *const c_char,
                 type_: 0x402,
@@ -499,14 +499,14 @@ impl TestCore {
             },
         ];
 
-        let content = [
+        const CONTENT: &[retro_subsystem_rom_info] = &[
             retro_subsystem_rom_info {
                 desc: b"Test Rom #1\0".as_ptr() as *const c_char,
                 valid_extensions: b"bin\0".as_ptr() as *const c_char,
                 need_fullpath: false,
                 block_extract: false,
                 required: true,
-                memory: mem1.as_ptr(),
+                memory: MEM1.as_ptr(),
                 num_memory: 2,
             },
             retro_subsystem_rom_info {
@@ -515,16 +515,16 @@ impl TestCore {
                 need_fullpath: false,
                 block_extract: false,
                 required: true,
-                memory: mem2.as_ptr(),
+                memory: MEM2.as_ptr(),
                 num_memory: 2,
             },
         ];
 
-        ctx.set_subsystem_info(&[
+        const INFO: &[retro_subsystem_info] = &[
             retro_subsystem_info {
                 desc: b"Foo\0".as_ptr() as *const c_char,
                 ident: b"foo\0".as_ptr() as *const c_char,
-                roms: content.as_ptr(),
+                roms: CONTENT.as_ptr(),
                 num_roms: 2,
                 id: 0x200,
             },
@@ -535,7 +535,9 @@ impl TestCore {
                 num_roms: 0,
                 id: 0,
             },
-        ])
+        ];
+
+        ctx.set_subsystem_info(INFO)
     }
 
     fn set_controller_info(
