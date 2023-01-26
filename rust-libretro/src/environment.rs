@@ -27,7 +27,7 @@ pub unsafe fn get<T: Default>(
     get_mut(callback, id, Default::default())
 }
 
-/// Similar to [`get`] but uses uninitialized memory instead of the [`Default`] trait.
+/// Similar to [`get`] but uses zeroed memory instead of the [`Default`] trait.
 #[inline(always)]
 pub unsafe fn get_unchecked<T>(
     callback: retro_environment_t,
