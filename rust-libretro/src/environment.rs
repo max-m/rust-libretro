@@ -1135,13 +1135,15 @@ pub unsafe fn set_hw_render_context_negotiation_interface(
 pub unsafe fn set_serialization_quirks(
     callback: retro_environment_t,
     quirks: SerializationQuirks,
-) -> Result<(), EnvironmentCallError> {
+) -> Result<SerializationQuirks, EnvironmentCallError> {
     // uint64_t *
-    set(
+    let bits = get_mut(
         callback,
         RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS,
-        quirks.bits() as u64,
-    )
+        quirks.bits(),
+    )?;
+
+    validate_bitflags!(SerializationQuirks, u64, bits)
 }
 
 /// The frontend will try to use a 'shared' hardware context (mostly applicable

@@ -136,36 +136,36 @@ fn retro_device_struct_size() {
 
 bitflags::bitflags! {
     /// Signifies quirks of the [`Core`]’s serialization feature (if any).
-    pub struct SerializationQuirks: u32 {
+    pub struct SerializationQuirks: u64 {
         /// Serialized state is incomplete in some way. Set if serialization is
         /// usable in typical end-user cases but should not be relied upon to
         /// implement frame-sensitive frontend features such as netplay or
         /// rerecording.
-        const INCOMPLETE = RETRO_SERIALIZATION_QUIRK_INCOMPLETE;
+        const INCOMPLETE = RETRO_SERIALIZATION_QUIRK_INCOMPLETE as u64;
 
         /// The core must spend some time initializing before serialization is
         /// supported. [`Core::on_serialize`] will initially fail; [`Core::on_unserialize`]
         /// and [`Core::get_serialize_size`] may or may not work correctly either.
-        const MUST_INITIALIZE = RETRO_SERIALIZATION_QUIRK_MUST_INITIALIZE;
+        const MUST_INITIALIZE = RETRO_SERIALIZATION_QUIRK_MUST_INITIALIZE as u64;
 
         /// Serialization size may change within a session.
-        const CORE_VARIABLE_SIZE = RETRO_SERIALIZATION_QUIRK_CORE_VARIABLE_SIZE;
+        const CORE_VARIABLE_SIZE = RETRO_SERIALIZATION_QUIRK_CORE_VARIABLE_SIZE as u64;
 
         /// Set by the frontend to acknowledge that it supports variable-sized
         /// states.
-        const FRONT_VARIABLE_SIZE = RETRO_SERIALIZATION_QUIRK_FRONT_VARIABLE_SIZE;
+        const FRONT_VARIABLE_SIZE = RETRO_SERIALIZATION_QUIRK_FRONT_VARIABLE_SIZE as u64;
 
         /// Serialized state can only be loaded during the same session.
-        const SINGLE_SESSION = RETRO_SERIALIZATION_QUIRK_SINGLE_SESSION;
+        const SINGLE_SESSION = RETRO_SERIALIZATION_QUIRK_SINGLE_SESSION as u64;
 
         /// Serialized state cannot be loaded on an architecture with a different
         /// endianness from the one it was saved on.
-        const ENDIAN_DEPENDENT = RETRO_SERIALIZATION_QUIRK_ENDIAN_DEPENDENT;
+        const ENDIAN_DEPENDENT = RETRO_SERIALIZATION_QUIRK_ENDIAN_DEPENDENT as u64;
 
         /// Serialized state cannot be loaded on a different platform from the one it
         /// was saved on for reasons other than endianness, such as word size
         /// dependence
-        const PLATFORM_DEPENDENT = RETRO_SERIALIZATION_QUIRK_PLATFORM_DEPENDENT;
+        const PLATFORM_DEPENDENT = RETRO_SERIALIZATION_QUIRK_PLATFORM_DEPENDENT as u64;
     }
 }
 
