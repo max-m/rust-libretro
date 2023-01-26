@@ -805,13 +805,26 @@ pub fn unstable(args: TokenStream, input: TokenStream) -> TokenStream {
 #[doc(hidden)]
 #[proc_macro_attribute]
 pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
-    let ctx_name = parse_macro_input!(args as syn::Ident);
+    let args = parse_macro_input!(args as syn::AttributeArgs);
+    let ctx_name = if let NestedMeta::Meta(syn::Meta::Path(path)) = args.get(0).unwrap() {
+        path.get_ident().unwrap()
+    } else {
+        panic!("expected Ident");
+    };
+
+    let keep_unsafe = if let Some(NestedMeta::Meta(syn::Meta::Path(path))) = args.get(1) {
+        path.get_ident().unwrap() == "unsafe"
+    } else {
+        false
+    };
 
     let item = parse_macro_input!(input as syn::ItemFn);
     let mut fun = item.clone();
 
-    // Mark functions as safe in this context
-    fun.sig.unsafety = None;
+    if !keep_unsafe {
+        // Mark functions as safe in this context
+        fun.sig.unsafety = None;
+    }
 
     let mut inputs: Punctuated<syn::FnArg, Token![,]> = Punctuated::new();
     inputs.push(parse_quote!(&self));
