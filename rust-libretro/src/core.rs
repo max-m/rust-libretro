@@ -36,7 +36,7 @@ pub trait Core: CoreOptions {
     /// Called when the frontend set a new environment callback.
     ///
     /// Guaranteed to be called before [`Core::on_init`].
-    fn on_set_environment(&mut self, _initial: bool, _ctx: &mut SetEnvironmentContext) {
+    fn on_set_environment(&mut self, _ctx: &mut SetEnvironmentContext) {
         // Do nothing
     }
 

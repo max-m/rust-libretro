@@ -565,9 +565,6 @@ fn impl_derive_core_options(input: DeriveInput) -> TokenStream {
             fn set_core_options(&self, ctx: &SetEnvironmentContext) -> Result<bool, ::rust_libretro::error::EnvironmentCallError> {
                 let gctx: GenericContext = ctx.into();
 
-                // For some reason the call to `supports_set_core_options` only works on the initial call of `on_set_environment`.
-                // On subsequent calls of `on_set_environment` querying `RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION` returns NULL pointers.
-                // But our `retro_set_environment` wrapper makes sure to call us on the initial call of `on_set_environment` only.
                 match gctx.get_core_options_version() {
                     n if n >= 2 => ctx.set_core_options_v2(&Self::__RETRO_CORE_OPTIONS_V2),
                     n if n >= 1 => ctx.set_core_options(&Self::__RETRO_CORE_OPTIONS).map(|()| false),
