@@ -16,9 +16,6 @@ use std::{
 };
 
 /// Gets a value from an environment callback.
-///
-/// The first value of the return type is the queried data,
-/// the second value is the return value of the callback itself.
 #[inline(always)]
 pub unsafe fn get<T: Default>(
     callback: retro_environment_t,
@@ -39,8 +36,6 @@ pub unsafe fn get_unchecked<T>(
 }
 
 /// Passes a value to the environment callback and returns the modified value.
-///
-/// The second value is the return value of the callback itself.
 pub unsafe fn get_mut<T>(
     callback: retro_environment_t,
     id: u32,
@@ -82,9 +77,6 @@ pub unsafe fn get_optional_path<'a>(
 }
 
 /// Passes a value to the environment callback.
-///
-/// Returns [`None`] if the environment callback hasn’t been set
-/// and the return status of the callback otherwise.
 #[inline(always)]
 pub unsafe fn set<T: std::fmt::Debug>(
     callback: retro_environment_t,
@@ -94,6 +86,7 @@ pub unsafe fn set<T: std::fmt::Debug>(
     set_ptr(callback, id, &value as *const _)
 }
 
+/// Passes a nullable value to the environment callback.
 #[inline(always)]
 pub unsafe fn set_option<T: std::fmt::Debug>(
     callback: retro_environment_t,
@@ -108,9 +101,6 @@ pub unsafe fn set_option<T: std::fmt::Debug>(
 }
 
 /// Passes a value (by a raw const pointer) to the environment callback.
-///
-/// Returns [`None`] if the environment callback hasn’t been set
-/// and the return status of the callback otherwise.
 pub unsafe fn set_ptr<T>(
     callback: retro_environment_t,
     id: u32,
