@@ -1222,7 +1222,7 @@ pub fn get_midi_interface(
 #[proc::unstable(feature = "env-commands")]
 pub unsafe fn get_fastforwarding(
     callback: retro_environment_t,
-) -> Result<(), EnvironmentCallError> {
+) -> Result<bool, EnvironmentCallError> {
     // bool *
     get(callback, RETRO_ENVIRONMENT_GET_FASTFORWARDING)
 }
