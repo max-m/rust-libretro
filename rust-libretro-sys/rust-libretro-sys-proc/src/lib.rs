@@ -83,7 +83,7 @@ pub fn from_primitive(input: TokenStream) -> TokenStream {
             }
         });
 
-        let repr_ident = format!("{}_REPR_TYPE", name);
+        let repr_ident = format!("{name}_REPR_TYPE");
         let repr_ident = syn::Ident::new(&repr_ident, name.span());
 
         let tokens = quote! {

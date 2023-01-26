@@ -21,7 +21,7 @@ fn libretro_h() -> bindgen::Builder {
         /// When running inside a `build.rs` script, this can be used to make cargo invalidate the
         /// generated bindings whenever any of the files included from the header change:
         fn include_file(&self, filename: &str) {
-            println!("cargo:rerun-if-changed={}", filename);
+            println!("cargo:rerun-if-changed={filename}");
         }
 
         fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
@@ -74,7 +74,7 @@ fn libretro_vulkan_h() -> bindgen::Builder {
         /// When running inside a `build.rs` script, this can be used to make cargo invalidate the
         /// generated bindings whenever any of the files included from the header change:
         fn include_file(&self, filename: &str) {
-            println!("cargo:rerun-if-changed={}", filename);
+            println!("cargo:rerun-if-changed={filename}");
         }
 
         fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
