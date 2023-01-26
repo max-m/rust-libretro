@@ -528,5 +528,17 @@ pub mod unstable {
                 >= std::mem::size_of::<retro_hw_render_context_negotiation_interface>(),
         );
     }
+
+    pub trait AsU32 {
+        fn as_u32(&self) -> u32;
+    }
+
+    impl AsU32 for retro_key {
+        // on Windows retro_key is backed by i32
+        #[allow(clippy::unnecessary_cast)]
+        fn as_u32(&self) -> u32 {
+            self.0 as u32
+        }
+    }
 }
 pub use unstable::*;
