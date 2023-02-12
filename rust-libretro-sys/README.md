@@ -3,7 +3,7 @@ rust-libretro-sys
 
 Raw bindings to the libretro API (generated with bindgen).
 
-[![libretro.h](https://img.shields.io/badge/libretro.h-b89692c-informational?logo=RetroArch)](https://github.com/libretro/RetroArch/blob/b89692c/libretro-common/include/libretro.h)
+[![libretro.h](https://img.shields.io/badge/libretro.h-9f7d0c7-informational?logo=RetroArch)](https://github.com/libretro/RetroArch/blob/9f7d0c7/libretro-common/include/libretro.h)
 
 [![Build status](https://img.shields.io/github/actions/workflow/status/max-m/rust-libretro/main.yaml?branch=master)](https://github.com/max-m/rust-libretro/actions)
 [![Latest version](https://img.shields.io/crates/v/rust-libretro-sys.svg)](https://crates.io/crates/rust-libretro-sys)
