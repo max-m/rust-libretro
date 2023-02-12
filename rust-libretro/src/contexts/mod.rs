@@ -1106,14 +1106,63 @@ impl<'a> LoadGameContext<'a> {
         get_application_info: retro_vulkan_get_application_info_t,
         create_device: retro_vulkan_create_device_t,
         destroy_device: retro_vulkan_destroy_device_t,
+        create_instance: retro_vulkan_create_instance_t,
+        create_device2: retro_vulkan_create_device2_t,
     ) -> Result<(), EnvironmentCallError> {
-        self.set_hw_render_context_negotiation_interface_data(retro_hw_render_context_negotiation_interface_vulkan {
-            interface_type: retro_hw_render_context_negotiation_interface_type::RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN,
-            interface_version: RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN_VERSION,
-            get_application_info,
-            create_device,
-            destroy_device,
-        })
+        let interface_type = retro_hw_render_context_negotiation_interface_type::RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN;
+
+        if create_instance.is_none() && create_device2.is_none() {
+            // Use a v1 context
+            return self.set_hw_render_context_negotiation_interface_data(
+                retro_hw_render_context_negotiation_interface_vulkan {
+                    interface_type,
+                    interface_version: 1,
+                    get_application_info,
+                    create_device,
+                    destroy_device,
+                    create_instance: None,
+                    create_device2: None,
+                },
+            );
+        }
+
+        // A frontend that supports the fields `create_instance`, `create_device2` must also support
+        // the `GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT` environment call.
+        // Make sure that the frontend supports the new interface.
+        if let Ok(version) =
+            self.get_hw_render_context_negotiation_interface_support(interface_type)
+        {
+            if version < RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN_VERSION {
+                let reason = format!(
+                    concat!(
+                        "`create_instance` and `create_device2` require support for version 2 of the ",
+                        "Vulkan context negotiation interface but the frontend only supports version {}"
+                    ),
+                    version
+                );
+                return Err(EnvironmentCallError::Unsupported(reason));
+            }
+
+            return self.set_hw_render_context_negotiation_interface_data(
+                retro_hw_render_context_negotiation_interface_vulkan {
+                    interface_type,
+                    interface_version: RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN_VERSION,
+                    get_application_info,
+                    create_device,
+                    destroy_device,
+                    create_instance,
+                    create_device2,
+                },
+            );
+        }
+
+        // The frontend did not support the `GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT`
+        // environment call, thus we must assume it only supports v1 of the interface.
+        let reason = format!(concat!(
+            "`create_instance` and `create_device2` require support for version 2 of the ",
+            "Vulkan context negotiation interface"
+        ));
+        Err(EnvironmentCallError::Unsupported(reason))
     }
 }
 into_generic!(LoadGameContext<'a>, 'a);

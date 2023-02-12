@@ -949,6 +949,8 @@ impl Core for TestCore {
                 Some(Self::get_application_info),
                 None,
                 None,
+                None,
+                None,
             );
 
             if let Err(err) = result {

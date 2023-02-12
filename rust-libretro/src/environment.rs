@@ -1135,6 +1135,49 @@ pub unsafe fn set_hw_render_context_negotiation_interface(
     )
 }
 
+/// Before calling [`set_hw_render_context_negotiation_interface`], a core can query
+/// which version of the interface is supported.
+///
+/// Frontend looks at `interface_type` and returns the maximum supported
+/// context negotiation interface version.
+/// If the `interface_type` is not supported or recognized by the frontend, a version of 0
+/// must be returned in `interface_version` and `true` is returned by frontend.
+///
+/// If this environment call returns `true` with `interface_version` greater than 0,
+/// a core can always use a negotiation interface version larger than what the frontend returns, but only
+/// earlier versions of the interface will be used by the frontend.
+/// A frontend must not reject a negotiation interface version that is larger than
+/// what the frontend supports. Instead, the frontend will use the older entry points that it recognizes.
+/// If this is incompatible with a particular core's requirements, it can error out early.
+///
+/// Backwards compatibility note:
+/// This environment call was introduced after Vulkan v1 context negotiation.
+/// If this environment call is not supported by frontend - i.e. the environment call returns false -
+/// only Vulkan v1 context negotiation is supported (if Vulkan HW rendering is supported at all).
+/// If a core uses Vulkan negotiation interface with version > 1, negotiation may fail unexpectedly.
+/// All future updates to the context negotiation interface implies that frontend must support
+/// this environment call to query support.
+#[proc::context(InitContext)]
+#[proc::context(LoadGameContext)]
+#[proc::unstable(feature = "env-commands")]
+pub unsafe fn get_hw_render_context_negotiation_interface_support(
+    callback: retro_environment_t,
+    interface_type: retro_hw_render_context_negotiation_interface_type,
+) -> Result<u32, EnvironmentCallError> {
+    // const struct retro_hw_render_context_negotiation_interface *
+
+    let data: retro_hw_render_context_negotiation_interface = get_mut(
+        callback,
+        RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT,
+        retro_hw_render_context_negotiation_interface {
+            interface_type,
+            interface_version: 0,
+        },
+    )?;
+
+    Ok(data.interface_version)
+}
+
 /// Sets quirk flags associated with serialization.
 /// The frontend will zero any flags it doesn't recognize or support.
 ///
