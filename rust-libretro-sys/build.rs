@@ -50,6 +50,7 @@ fn libretro_h() -> bindgen::Builder {
         .newtype_enum("retro_key")
         .bitfield_enum("retro_mod")
         .parse_callbacks(Box::new(LibretroParseCallbacks))
+        .use_core()
 }
 
 fn libretro_vulkan_h() -> bindgen::Builder {
@@ -90,6 +91,7 @@ fn libretro_vulkan_h() -> bindgen::Builder {
             non_exhaustive: true,
         })
         .parse_callbacks(Box::new(LibretroVulkanParseCallbacks))
+        .use_core()
 }
 
 fn save_bindings(bindings: Bindings, name: &str) {

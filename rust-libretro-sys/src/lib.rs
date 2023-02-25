@@ -1,3 +1,4 @@
+#![no_std]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -43,8 +44,7 @@ pub const RETRO_DEVICE_ID_LIGHTGUN_PAUSE: u32 = 5;
 /// Passing NULL to [`retro_video_refresh_t`] is still a frame dupe as normal.
 ///
 /// For some reason bindgen did not export this #define
-pub const RETRO_HW_FRAME_BUFFER_VALID: *mut std::os::raw::c_void =
-    -1_i32 as *mut std::os::raw::c_void;
+pub const RETRO_HW_FRAME_BUFFER_VALID: *mut core::ffi::c_void = -1_i32 as *mut core::ffi::c_void;
 
 #[derive(Debug, Default)]
 pub struct InvalidEnumValue<T: Display>(T);
